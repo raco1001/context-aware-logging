@@ -4,6 +4,18 @@
 
 Replace line-based logging with request-scoped Wide Events.
 
+## Test Data Initiation & Testing
+
+```bash
+node run test_data/generator # Builds JSON data file 'payments_data.json'.
+
+cd backend
+
+pnpm start:dev
+
+bash ../test_data/run_load_test.sh # Calls 2,000 test requests.
+```
+
 ## Key Ideas
 
 - One request → one log event
