@@ -1,0 +1,85 @@
+sequenceDiagram
+    participant Client
+    participant LoggingInterceptor
+    participant LoggingService
+    participant ContextService
+    participant AsyncLocalStorage
+    participant AppController
+    participant AppService
+    participant FileLogger
+    participant LogFile
+
+    Note over Client,LogFile: Request Lifecycle with LoggingContext → WideEvent
+
+    Client->>LoggingInterceptor: HTTP Request (GET /)
+
+    Note over LoggingInterceptor: 1. Request Interception
+
+    LoggingInterceptor->>LoggingInterceptor: Generate requestId (UUID)
+    LoggingInterceptor->>LoggingService: initializeContext(requestId, service, route)
+
+    Note over LoggingService: Creates LoggingContext<br/>(mutable, request-scoped)
+
+    LoggingService-->>LoggingInterceptor: LoggingContext<br/>{requestId, timestamp, service, route}
+
+    LoggingInterceptor->>LoggingInterceptor: Record startTime
+
+    Note over ContextService,AsyncLocalStorage: 2. Context Storage Setup
+
+    LoggingInterceptor->>ContextService: run(loggingContext, handler)
+    ContextService->>AsyncLocalStorage: Store LoggingContext<br/>(preserves across async boundaries)
+
+    Note over AppController,AppService: 3. Request Processing<br/>(within AsyncLocalStorage context)
+
+    ContextService->>AppController: Execute handler()
+    AppController->>AppService: getHello()
+    AppService-->>AppController: "Hello World!"
+    AppController-->>ContextService: Response
+
+    alt Error Occurs
+        AppService-->>LoggingInterceptor: Throw Error
+        LoggingInterceptor->>LoggingService: addError({code, message})
+        LoggingService->>ContextService: addError(error)
+        ContextService->>AsyncLocalStorage: getContext()
+        AsyncLocalStorage-->>ContextService: LoggingContext
+        ContextService->>ContextService: Object.assign(context, {error})
+        Note over AsyncLocalStorage: LoggingContext enriched<br/>with error info
+    end
+
+    Note over LoggingInterceptor: 4. Request Finalization
+
+    LoggingInterceptor->>LoggingService: addPerformance({durationMs})
+    LoggingService->>ContextService: addPerformance(performance)
+    ContextService->>AsyncLocalStorage: getContext()
+    AsyncLocalStorage-->>ContextService: LoggingContext
+    ContextService->>ContextService: Object.assign(context, {performance})
+    Note over AsyncLocalStorage: LoggingContext enriched<br/>with performance metrics
+
+    LoggingInterceptor->>LoggingService: finalize()
+
+    Note over LoggingService: 5. LoggingContext → WideEvent Conversion
+
+    LoggingService->>ContextService: getContext()
+    ContextService->>AsyncLocalStorage: getStore()
+    AsyncLocalStorage-->>ContextService: LoggingContext<br/>(fully enriched)
+    ContextService-->>LoggingService: LoggingContext
+
+    Note over LoggingService: Convert mutable LoggingContext<br/>to immutable WideEvent
+
+    LoggingService->>LoggingService: Create WideEvent from LoggingContext<br/>{requestId, timestamp, service,<br/>route, user?, error?, performance?}
+
+    Note over LoggingService,FileLogger: 6. Persistence (Infrastructure Layer)
+
+    LoggingService->>FileLogger: log(wideEvent: WideEvent)
+
+    Note over FileLogger: WideEvent is immutable<br/>(single unit of truth)
+
+    FileLogger->>FileLogger: JSON.stringify(wideEvent) + '\n'
+    FileLogger->>LogFile: Append JSON line
+    LogFile-->>FileLogger: Success
+    FileLogger-->>LoggingService: Promise resolved
+
+    LoggingService-->>LoggingInterceptor: Finalization complete
+    LoggingInterceptor-->>Client: HTTP Response
+
+    Note over Client,LogFile: One HTTP Request → One Wide Event<br/>LoggingContext (mutable) → WideEvent (immutable)

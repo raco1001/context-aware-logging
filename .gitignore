@@ -1,0 +1,10 @@
+*/**/.cursor/
+.cursor/
+*/**/dist/
+*/**/node_modules/
+*/**/build/
+*/**/coverage/
+*/**/logs/
+*/**/test
+*/**/logs/*
+*/**/dist
