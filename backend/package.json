@@ -52,7 +52,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.3",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
@@ -61,15 +61,21 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
+    "rootDir": ".",
+    "testRegex": "src/.*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^@logging/(.*)$": "<rootDir>/libs/logging/$1",
+      "^@embeddings/core/(.*)$": "<rootDir>/src/embeddings/core/$1",
+      "^@embeddings/infra/(.*)$": "<rootDir>/src/embeddings/infrastructure/$1",
+      "^@embeddings/services/(.*)$": "<rootDir>/src/embeddings/services/$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "./coverage",
     "testEnvironment": "node"
   }
 }

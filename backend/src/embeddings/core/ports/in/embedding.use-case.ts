@@ -1,14 +1,5 @@
-import { LogEmbedding } from '../../domain/embedding.entity';
-
-/**
- * Inbound port (Use Case) for the embedding module.
- */
+import { LogEmbeddingEntity } from '@embeddings/domain/index';
 export abstract class EmbeddingUseCase {
-  /**
-   * Processes a batch of logs that have not yet been embedded.
-   * @param limit The maximum number of logs to process in this batch.
-   * @returns The number of successfully processed logs.
-   */
   abstract processPendingLogs(limit: number): Promise<number>;
 
   /**

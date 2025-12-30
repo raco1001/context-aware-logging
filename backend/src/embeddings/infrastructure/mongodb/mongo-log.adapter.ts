@@ -1,11 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  LogStoragePort,
-  Watermark,
-} from '../../core/ports/out/log-storage.port';
-import { LogEmbedding } from '../../core/domain/embedding.entity';
+import { LogStoragePort, Watermark } from '@embeddings/out-ports/index';
+import { LogEmbeddingEntity } from '@embeddings/domain/index';
 import { MongoEmbeddingConnection } from './db.connect';
-import { EmbeddingStatus } from '../../../../libs/logging/core/domain/value-objects';
+import { EmbeddingStatus } from '@logging/value-objects/index';
+import { QueryMetadata } from '@embeddings/dtos/index';
 
 @Injectable()
 export class MongoLogAdapter extends LogStoragePort {
@@ -41,7 +39,7 @@ export class MongoLogAdapter extends LogStoragePort {
     source: string,
     watermark: Watermark | null,
     limit: number,
-  ): Promise<LogEmbedding[]> {
+  ): Promise<LogEmbeddingEntity[]> {
     try {
       const collection = this.connection.getCollection(source);
 
@@ -67,12 +65,13 @@ export class MongoLogAdapter extends LogStoragePort {
 
       return docs.map(
         (doc) =>
-          new LogEmbedding(
+          new LogEmbeddingEntity(
             doc._id,
             doc.requestId,
             doc.timestamp,
             doc._summary,
             EmbeddingStatus.PENDING,
+            doc.service,
             undefined,
             undefined,
           ),
@@ -93,6 +92,8 @@ export class MongoLogAdapter extends LogStoragePort {
       summary: string;
       embedding: number[];
       model: string;
+      service?: string;
+      timestamp?: Date;
     }>,
     newWatermark: Watermark,
   ): Promise<void> {
@@ -104,19 +105,18 @@ export class MongoLogAdapter extends LogStoragePort {
         this.progressCollection,
       );
 
-      // 1. Save embedded results
       if (results.length > 0) {
         const insertDocs = results.map((r) => ({
           eventId: r.eventId,
           summary: r.summary,
           model: r.model,
           embedding: r.embedding,
-          createdAt: new Date(),
+          service: r.service,
+          createdAt: r.timestamp || new Date(),
         }));
         await embeddedColl.insertMany(insertDocs);
       }
 
-      // 2. Update watermark
       await progressColl.updateOne(
         { source },
         {
@@ -142,23 +142,43 @@ export class MongoLogAdapter extends LogStoragePort {
 
   async logFailure(requestId: string, reason: string): Promise<void> {
     this.logger.error(`Embedding failure for ${requestId}: ${reason}`);
-    // In a production app, we might save this to a separate dead-letter collection
   }
 
-  async vectorSearch(embedding: number[], limit: number): Promise<any[]> {
+  async vectorSearch(
+    embedding: number[],
+    limit: number,
+    metadata?: QueryMetadata,
+  ): Promise<any[]> {
     try {
       const collection = this.connection.getCollection(this.embeddedCollection);
 
-      // MongoDB Atlas Vector Search Pipeline
+      const filter: any = {};
+      if (metadata) {
+        if (metadata.startTime || metadata.endTime) {
+          filter.createdAt = {};
+          if (metadata.startTime) filter.createdAt.$gte = metadata.startTime;
+          if (metadata.endTime) filter.createdAt.$lte = metadata.endTime;
+        }
+        if (metadata.service) {
+          filter.service = metadata.service;
+        }
+      }
+
+      const vectorSearchStage: any = {
+        index: 'embedding_index',
+        path: 'embedding',
+        queryVector: embedding,
+        numCandidates: limit * 10,
+        limit: limit,
+      };
+
+      if (Object.keys(filter).length > 0) {
+        vectorSearchStage.filter = filter;
+      }
+
       const pipeline = [
         {
-          $vectorSearch: {
-            index: 'embedding_index',
-            path: 'embedding',
-            queryVector: embedding,
-            numCandidates: limit * 10,
-            limit: limit,
-          },
+          $vectorSearch: vectorSearchStage,
         },
         {
           $project: {
@@ -173,6 +193,16 @@ export class MongoLogAdapter extends LogStoragePort {
       return await collection.aggregate(pipeline).toArray();
     } catch (error) {
       this.logger.error(`Embedding search failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getLogsByEventIds(eventIds: any[]): Promise<any[]> {
+    try {
+      const collection = this.connection.getCollection(this.collectionName);
+      return await collection.find({ _id: { $in: eventIds } }).toArray();
+    } catch (error) {
+      this.logger.error(`Failed to get logs by event IDs: ${error.message}`);
       throw error;
     }
   }

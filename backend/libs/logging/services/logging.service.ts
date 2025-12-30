@@ -1,10 +1,8 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { LoggerPort } from '../core/port/out/logger.port';
-import { WideEvent } from '../core/domain/wide-event';
-import { LoggingContext } from '../core/domain/context';
-import { ContextService } from './context.service';
-import { Latency } from '../core/domain/latency';
-import { LatencyBucket } from '../core/domain/value-objects';
+import { Injectable, OnModuleDestroy } from "@nestjs/common";
+import { LoggerPort } from "@logging/out-ports/index";
+import { WideEvent, LoggingContext, Latency } from "@logging/domain/index";
+import { ContextService } from "./context.service";
+import { LatencyBucket } from "@logging/value-objects/index";
 
 /**
  * LoggingService - Application layer service for managing Wide Events.
@@ -120,17 +118,17 @@ export class LoggingService implements OnModuleDestroy {
   private generateSummary(context: LoggingContext): string {
     const { service, route, error, user, performance } = context;
 
-    const errorCode = error?.code ?? 'NONE';
-    const errorMessage = error?.message ?? 'NONE';
-    const userRole = user?.role ?? 'ANONYMOUS';
+    const errorCode = error?.code ?? "NONE";
+    const errorMessage = error?.message ?? "NONE";
+    const userRole = user?.role ?? "ANONYMOUS";
     const latencyBucket = Latency.getBucket(performance?.durationMs);
     const outcome = error
-      ? 'FAILED'
+      ? "FAILED"
       : latencyBucket === LatencyBucket.P_OVER_1000MS
-        ? 'WARNING'
+        ? "WARNING"
         : latencyBucket === LatencyBucket.P_UNKNOWN
-          ? 'EDGE_CASE'
-          : 'SUCCESS';
+          ? "EDGE_CASE"
+          : "SUCCESS";
 
     return `Outcome: ${outcome}, Service: ${service}, Route: ${route}, Error: ${errorCode}, ErrorMessage: ${errorMessage}, UserRole: ${userRole}, LatencyBucket: ${latencyBucket}`;
   }

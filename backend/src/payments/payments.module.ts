@@ -1,15 +1,15 @@
 import { Module } from '@nestjs/common';
-import { PaymentsController } from './controllers/payments.controller';
-import { PaymentsService } from './services/payments.service';
-import { PaymentsOutAdapter } from './infrastructure/payments.out.adapter';
-import { PaymentsOutPort } from './core/ports/out/payments.out.port';
+import { PaymentsController } from '@payments/presentation/index';
+import { PaymentsService } from '@payments/services/index';
+import { PaymentsOutAdapter } from '@payments/infrastructure/index';
+import { PaymentsOutPort } from '@payments/out-ports/index';
+import { PaymentsServicePort } from '@payments/in-ports/index';
 
 @Module({
   controllers: [PaymentsController],
   providers: [
-    PaymentsService,
+    { provide: PaymentsServicePort, useClass: PaymentsService },
     { provide: PaymentsOutPort, useClass: PaymentsOutAdapter },
   ],
 })
 export class PaymentsModule {}
-

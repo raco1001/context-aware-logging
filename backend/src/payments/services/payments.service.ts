@@ -1,12 +1,13 @@
-import { Injectable } from '@nestjs/common';
-import { PaymentsServicePort } from '../core/ports/in/payments.service.port';
-import { PaymentsOutPort } from '../core/ports/out/payments.out.port';
-import { PaymentRequest } from '../core/domain/dtos/payment-request';
-import { PaymentResult } from '../core/domain/dtos/payment-result';
+import { Injectable } from "@nestjs/common";
+import { PaymentsServicePort } from "@payments/in-ports/index";
+import { PaymentsOutPort } from "@payments/out-ports/index";
+import { PaymentRequest, PaymentResult } from "@payments/dtos/index";
 
 @Injectable()
-export class PaymentsService implements PaymentsServicePort {
-  constructor(private readonly outPort: PaymentsOutPort) {}
+export class PaymentsService extends PaymentsServicePort {
+  constructor(private readonly outPort: PaymentsOutPort) {
+    super();
+  }
 
   async processPayment(request: PaymentRequest): Promise<PaymentResult> {
     const hasBalance = await this.outPort.checkBalance(
@@ -17,8 +18,8 @@ export class PaymentsService implements PaymentsServicePort {
     if (!hasBalance)
       return {
         success: false,
-        errorCode: 'INSUFFICIENT_BALANCE',
-        errorMessage: 'Insufficient balance',
+        errorCode: "INSUFFICIENT_BALANCE",
+        errorMessage: "Insufficient balance",
       };
 
     try {
@@ -29,14 +30,13 @@ export class PaymentsService implements PaymentsServicePort {
       if (!gatewayRes.success) {
         return {
           success: false,
-          errorCode: 'GATEWAY_REJECTED',
-          errorMessage: 'The gateway rejected the payment.',
+          errorCode: "GATEWAY_REJECTED",
+          errorMessage: "The gateway rejected the payment.",
         };
       }
       return { success: true, transactionId: gatewayRes.id };
     } catch (e) {
       try {
-        // Try to parse the rich error object from the infrastructure layer
         const errorData = JSON.parse(e.message);
         return {
           success: false,
@@ -44,11 +44,10 @@ export class PaymentsService implements PaymentsServicePort {
           errorMessage: errorData.message,
         };
       } catch {
-        // Fallback for plain error messages
-        const isTimeout = e.message.toLowerCase().includes('timeout');
+        const isTimeout = e.message.toLowerCase().includes("timeout");
         return {
           success: false,
-          errorCode: isTimeout ? 'GATEWAY_TIMEOUT' : 'GATEWAY_ERROR',
+          errorCode: isTimeout ? "GATEWAY_TIMEOUT" : "GATEWAY_ERROR",
           errorMessage: e.message,
         };
       }

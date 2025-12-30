@@ -11,4 +11,4 @@ export { LoggingService } from './services/logging.service';
 export { ContextService } from './services/context.service';
 
 // Interceptors
-export { LoggingInterceptor } from './interceptors/logging.interceptor';
+export { LoggingInterceptor } from './presentation/logging.interceptor';

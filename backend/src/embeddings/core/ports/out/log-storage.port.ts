@@ -1,4 +1,5 @@
-import { LogEmbedding } from '../../domain/embedding.entity';
+import { LogEmbeddingEntity } from "@embeddings/domain/index";
+import { QueryMetadata } from "@embeddings/dtos/index";
 
 /**
  * Watermark info for tracking embedding progress.
@@ -25,7 +26,7 @@ export abstract class LogStoragePort {
     source: string,
     watermark: Watermark | null,
     limit: number,
-  ): Promise<LogEmbedding[]>;
+  ): Promise<LogEmbeddingEntity[]>;
 
   /**
    * Saves embedding results to the destination collection and updates the watermark.
@@ -38,6 +39,8 @@ export abstract class LogStoragePort {
       summary: string;
       embedding: number[];
       model: string;
+      service?: string;
+      timestamp?: Date;
     }>,
     newWatermark: Watermark,
   ): Promise<void>;
@@ -48,7 +51,16 @@ export abstract class LogStoragePort {
   abstract logFailure(requestId: string, reason: string): Promise<void>;
 
   /**
-   * Performs semantic search using vector similarity.
+   * Performs semantic search using vector similarity with optional metadata filtering.
    */
-  abstract vectorSearch(vector: number[], limit: number): Promise<any[]>;
+  abstract vectorSearch(
+    vector: number[],
+    limit: number,
+    metadata?: QueryMetadata,
+  ): Promise<any[]>;
+
+  /**
+   * Retrieves full log documents by their internal IDs.
+   */
+  abstract getLogsByEventIds(eventIds: any[]): Promise<any[]>;
 }

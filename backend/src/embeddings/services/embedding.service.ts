@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingUseCase } from '../core/ports/in/embedding.use-case';
-import { LogStoragePort } from '../core/ports/out/log-storage.port';
-import { EmbeddingPort } from '../core/ports/out/embedding.port';
+import { EmbeddingUseCase } from '@embeddings/in-ports/index';
+import { EmbeddingPort, LogStoragePort } from '@embeddings/out-ports/index';
 
 @Injectable()
 export class EmbeddingService extends EmbeddingUseCase {
@@ -21,16 +20,20 @@ export class EmbeddingService extends EmbeddingUseCase {
     );
   }
 
+  /**
+   * Processes a batch of logs that have not yet been embedded.
+   * @param limit The maximum number of logs to process in this batch.
+   * @returns The number of successfully processed logs.
+   * @throws An error if the batch processing fails.
+   */
   async processPendingLogs(limit: number): Promise<number> {
     const source = 'wide_events';
     this.logger.log(
       `Starting High-Watermark embedding process (Source: ${source}, Limit: ${limit}, Chunk Size: ${this.batchChunkSize})`,
     );
 
-    // 1. Get current watermark
     const watermark = await this.logStorage.getWatermark(source);
 
-    // 2. Fetch logs after watermark
     const logsToEmbed = await this.logStorage.findLogsAfterWatermark(
       source,
       watermark,
@@ -44,7 +47,6 @@ export class EmbeddingService extends EmbeddingUseCase {
 
     let processedCount = 0;
 
-    // 3. Process in chunks
     for (let i = 0; i < logsToEmbed.length; i += this.batchChunkSize) {
       const chunk = logsToEmbed.slice(i, i + this.batchChunkSize);
       const summaries = chunk.map((log) => log.summary);
@@ -54,23 +56,22 @@ export class EmbeddingService extends EmbeddingUseCase {
         const results =
           await this.embeddingPort.createBatchEmbeddings(summaries);
 
-        // Map results back to log metadata
         const resultsToSave = chunk.map((log, index) => ({
           eventId: log.internalId,
           requestId: log.requestId,
           summary: log.summary,
           embedding: results[index].embedding,
           model: results[index].model,
+          service: log.service,
+          timestamp: log.timestamp,
         }));
 
-        // Use the last log in the chunk as the new watermark
         const lastLog = chunk[chunk.length - 1];
         const newWatermark = {
           lastEventId: lastLog.internalId,
           lastEventTimestamp: lastLog.timestamp,
         };
 
-        // 4. Save results and update progress
         await this.logStorage.saveEmbeddingsAndUpdateWatermark(
           source,
           resultsToSave,
@@ -90,7 +91,6 @@ export class EmbeddingService extends EmbeddingUseCase {
         this.logger.error(
           `Batch processing failed at chunk index ${i}: ${error.message}`,
         );
-        // In watermark strategy, we stop here to avoid gaps or redundant processing
         break;
       }
     }
@@ -104,18 +104,12 @@ export class EmbeddingService extends EmbeddingUseCase {
   async search(query: string, limit: number = 5): Promise<any[]> {
     this.logger.log(`Searching for semantic matches: "${query}"`);
 
-    // 1. Convert query to vector
     const { embedding } = await this.embeddingPort.createEmbedding(query);
 
-    // 2. Perform vector search
     return this.logStorage.vectorSearch(embedding, limit);
   }
 
   async embedByRequestId(requestId: string): Promise<void> {
-    // This could be implemented by finding the log first and then embedding it
-    // For simplicity in this demo, we'll focus on the batch process.
-    this.logger.warn(
-      `Single log embedding for ${requestId} requested (not implemented in this phase)`,
-    );
+    this.logger.warn(`Single log embedding for ${requestId} requested`);
   }
 }

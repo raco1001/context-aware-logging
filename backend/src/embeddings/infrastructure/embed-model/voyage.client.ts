@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { VoyageAIClient } from 'voyageai';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { VoyageAIClient } from "voyageai";
 
 /**
- * VoyageClient - Infrastructure client for interacting with the Voyage AI API
- * using the official SDK.
+ * VoyageClient - Infrastructure client for initializing and managing the Voyage AI SDK client.
+ * This class is responsible solely for client initialization and configuration.
+ * Actual API operations are delegated to adapters that use this client instance.
  */
 @Injectable()
 export class VoyageClient {
@@ -13,36 +14,34 @@ export class VoyageClient {
   private readonly model: string;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>('EMBEDDING_MODEL_KEY');
+    const apiKey = this.configService.get<string>("EMBEDDING_MODEL_KEY");
     this.model =
-      this.configService.get<string>('EMBEDDING_MODEL') || 'voyage-3-lite';
+      this.configService.get<string>("EMBEDDING_MODEL") || "voyage-3-lite";
 
     if (!apiKey) {
       this.logger.warn(
-        'EMBEDDING_MODEL_KEY is not defined. Embedding operations will fail.',
+        "EMBEDDING_MODEL_KEY is not defined. Embedding operations will fail.",
       );
     }
 
     this.client = new VoyageAIClient({
-      apiKey: apiKey || '',
+      apiKey: apiKey || "",
     });
+
+    this.logger.log(`Voyage AI client initialized with model: ${this.model}`);
   }
 
   /**
-   * Generates embeddings for the given inputs using the official SDK.
+   * Returns the initialized Voyage AI client instance.
+   * This is the single source of truth for the Voyage AI SDK client.
    */
-  async createEmbeddings(inputs: string[]): Promise<any> {
-    try {
-      return await this.client.embed({
-        input: inputs,
-        model: this.model,
-      });
-    } catch (error) {
-      this.logger.error(`Embedding generation failed: ${error.message}`);
-      throw error;
-    }
+  getClient(): VoyageAIClient {
+    return this.client;
   }
 
+  /**
+   * Returns the configured model name.
+   */
   getModelName(): string {
     return this.model;
   }

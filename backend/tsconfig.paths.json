@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@logging/*": ["libs/logging/*"],
+      "@logging/domain/*": ["libs/logging/core/domain/*"],
+      "@logging/value-objects/*": ["libs/logging/core/value-objects/*"],
+      "@logging/out-ports/*": ["libs/logging/core/ports/out/*"],
+      "@logging/in-ports/*": ["libs/logging/core/ports/in/*"],
+      "@logging/dtos/*": ["libs/logging/core/dtos/*"],
+      "@logging/infrastructure/*": ["libs/logging/infrastructure/*"],
+      "@logging/services/*": ["libs/logging/services/*"],
+      "@logging/presentation/*": ["libs/logging/presentation/*"],
+
+      "@embeddings/*": ["src/embeddings/*"],
+      "@embeddings/domain/*": ["src/embeddings/core/domain/*"],
+      "@embeddings/value-objects/*": ["src/embeddings/core/value-objects/*"],
+      "@embeddings/dtos/*": ["src/embeddings/core/dtos/*"],
+      "@embeddings/in-ports/*": ["src/embeddings/core/ports/in/*"],
+      "@embeddings/out-ports/*": ["src/embeddings/core/ports/out/*"],
+      "@embeddings/infrastructure/*": ["src/embeddings/infrastructure/*"],
+      "@embeddings/services/*": ["src/embeddings/services/*"],
+      "@embeddings/presentation/*": ["src/embeddings/presentation/*"],
+
+      "@payments/*": ["src/payments/*"],
+      "@payments/domain/*": ["src/payments/core/domain/*"],
+      "@payments/value-objects/*": ["src/payments/core/value-objects/*"],
+      "@payments/dtos/*": ["src/payments/core/dtos/*"],
+      "@payments/in-ports/*": ["src/payments/core/ports/in/*"],
+      "@payments/out-ports/*": ["src/payments/core/ports/out/*"],
+      "@payments/infrastructure/*": ["src/payments/infrastructure/*"],
+      "@payments/services/*": ["src/payments/services/*"],
+      "@payments/presentation/*": ["src/payments/presentation/*"]
+    }
+  }
+}

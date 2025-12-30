@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PaymentsService } from './payments.service';
-import { PaymentsOutPort } from '../core/ports/out/payments.out.port';
+import { PaymentsService } from '@payments/services/index';
+import { PaymentsOutPort } from '@payments/out-ports/index';
 
 describe('PaymentsService', () => {
   let service: PaymentsService;

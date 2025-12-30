@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { LoggerPort } from '../../core/port/out/logger.port';
-import { WideEvent } from '../../core/domain/wide-event';
-import { MongoConnectionClient } from './mongo.client';
-import { LoggingContext } from '../../core/domain/context';
+import { Injectable, Logger } from "@nestjs/common";
+import { LoggerPort } from "@logging/out-ports/index";
+import { WideEvent } from "@logging/domain/index";
+import { MongoConnectionClient } from "./mongo.client";
+import { LoggingContext } from "@logging/domain/index";
 
 /**
  * MongoLogger - Infrastructure layer implementation of LoggerPort.
@@ -11,7 +11,7 @@ import { LoggingContext } from '../../core/domain/context';
 @Injectable()
 export class MongoLogger extends LoggerPort {
   private readonly internalLogger = new Logger(MongoLogger.name);
-  private readonly collectionName = 'wide_events';
+  private readonly collectionName = "wide_events";
 
   constructor(private readonly mongoConnectionClient: MongoConnectionClient) {
     super();
@@ -23,13 +23,10 @@ export class MongoLogger extends LoggerPort {
    */
   async log(
     event: WideEvent,
-    _metadata: LoggingContext['_metadata'] | undefined,
+    _metadata: LoggingContext["_metadata"] | undefined,
     _summary: string,
   ): Promise<void> {
     try {
-      // Convert WideEvent to MongoDB Document
-      // Note: In Phase 2, we convert the ISO string timestamp to a Date object
-      // to leverage MongoDB's native Time-series optimizations.
       const document = {
         ...event,
         timestamp: new Date(event.timestamp),
@@ -40,7 +37,6 @@ export class MongoLogger extends LoggerPort {
         .getCollection(this.collectionName)
         .insertOne(document);
     } catch (error) {
-      // Logging failures should not break the application (Non-blocking principle)
       this.internalLogger.error(
         `Failed to persist log to MongoDB: ${error.message}`,
       );

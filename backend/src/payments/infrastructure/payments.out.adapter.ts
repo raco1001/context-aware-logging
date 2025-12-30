@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { PaymentsOutPort } from '../core/ports/out/payments.out.port';
-import { PaymentErrorVO } from '../core/domain/value-objects/payment-errors.vo';
+import { Injectable } from "@nestjs/common";
+import { PaymentsOutPort } from "@payments/out-ports/index";
+import { PaymentErrorVO } from "@payments/value-objects/index";
 
 @Injectable()
 export class PaymentsOutAdapter implements PaymentsOutPort {
@@ -22,7 +22,6 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
 
     const random = Math.random() * 100;
 
-    // 70% Success, 30% Failure
     if (random > 70) {
       const error = PaymentErrorVO.getRandomError();
       throw new Error(
@@ -32,7 +31,7 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
 
     return {
       success: true,
-      id: `txn_${Math.random().toString(36).substr(2, 9)}`,
+      id: `txn_${Math.random().toString(36).slice(2, 9)}`,
     };
   }
 }

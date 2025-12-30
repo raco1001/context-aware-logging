@@ -1,36 +1,65 @@
 import { Module } from '@nestjs/common';
-import { EmbeddingUseCase } from './core/ports/in/embedding.use-case';
-import { EmbeddingPort } from './core/ports/out/embedding.port';
-import { LogStoragePort } from './core/ports/out/log-storage.port';
-import { EmbeddingService } from './services/embedding.service';
-import { VoyageAdapter } from './infrastructure/embed-model/voyage.adapter';
-import { VoyageClient } from './infrastructure/embed-model/voyage.client';
-import { MongoLogAdapter } from './infrastructure/mongodb/mongo-log.adapter';
-import { MongoEmbeddingConnection } from './infrastructure/mongodb/db.connect';
-import { EmbeddingController } from './controllers/embedding.controller';
+import { EmbeddingUseCase, SearchUseCase } from '@embeddings/in-ports/index';
+import {
+  EmbeddingPort,
+  RerankPort,
+  SynthesisPort,
+  ChatHistoryPort,
+  LogStoragePort,
+} from '@embeddings/out-ports/index';
+import { EmbeddingService, SearchService } from '@embeddings/services/index';
+import {
+  VoyageAdapter,
+  VoyageClient,
+  GeminiAdapter,
+  GeminiClient,
+  MongoLogAdapter,
+  MongoSearchAdapter,
+  MongoEmbeddingConnection,
+} from '@embeddings/infrastructure/index';
+import {
+  EmbeddingController,
+  SearchController,
+} from '@embeddings/presentation/index';
 
 @Module({
-  controllers: [EmbeddingController],
+  controllers: [EmbeddingController, SearchController],
   providers: [
-    // Services
+    // Infrastructure Clients (Initialization only)
+    VoyageClient,
+    GeminiClient,
+    MongoEmbeddingConnection,
+    // Services (Inbound Ports, Use Cases)
     {
       provide: EmbeddingUseCase,
       useClass: EmbeddingService,
     },
-    // Outbound Adapters
+    {
+      provide: SearchUseCase,
+      useClass: SearchService,
+    },
+    // Infrastructures (Outbound Ports, Adapters)
     {
       provide: EmbeddingPort,
       useClass: VoyageAdapter,
     },
     {
+      provide: RerankPort,
+      useClass: VoyageAdapter,
+    },
+    {
+      provide: SynthesisPort,
+      useClass: GeminiAdapter,
+    },
+    {
+      provide: ChatHistoryPort,
+      useClass: MongoSearchAdapter,
+    },
+    {
       provide: LogStoragePort,
       useClass: MongoLogAdapter,
     },
-    // Infrastructure Clients
-    VoyageClient,
-    MongoEmbeddingConnection,
   ],
-  exports: [EmbeddingUseCase],
+  exports: [EmbeddingUseCase, SearchUseCase],
 })
 export class EmbeddingsModule {}
-
