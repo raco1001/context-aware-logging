@@ -1,8 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { LoggerPort } from "@logging/out-ports/index";
-import { WideEvent } from "@logging/domain/index";
+import { LoggerPort } from "@logging/out-ports";
+import { WideEvent } from "@logging/domain";
 import { MongoConnectionClient } from "./mongo.client";
-import { LoggingContext } from "@logging/domain/index";
+import { LoggingContext } from "@logging/domain";
 
 /**
  * MongoLogger - Infrastructure layer implementation of LoggerPort.

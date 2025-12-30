@@ -1,4 +1,4 @@
-import { EmbeddingStatus } from '@logging/value-objects/index';
+import { EmbeddingStatus } from "@logging/value-objects";
 
 /**
  * Result of an embedding operation.

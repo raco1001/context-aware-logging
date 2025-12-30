@@ -1,16 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { LogStoragePort, Watermark } from '@embeddings/out-ports/index';
-import { LogEmbeddingEntity } from '@embeddings/domain/index';
-import { MongoEmbeddingConnection } from './db.connect';
-import { EmbeddingStatus } from '@logging/value-objects/index';
-import { QueryMetadata } from '@embeddings/dtos/index';
+import { Injectable, Logger } from "@nestjs/common";
+import { LogStoragePort, Watermark } from "@embeddings/out-ports";
+import { LogEmbeddingEntity } from "@embeddings/domain";
+import { MongoEmbeddingConnection } from "./mongo.client";
+import { EmbeddingStatus } from "@logging/value-objects";
+import { QueryMetadata } from "@embeddings/dtos";
 
 @Injectable()
 export class MongoLogAdapter extends LogStoragePort {
   private readonly logger = new Logger(MongoLogAdapter.name);
-  private readonly collectionName = 'wide_events';
-  private readonly progressCollection = 'embedding_progress';
-  private readonly embeddedCollection = 'wide_events_embedded';
+  private readonly collectionName = "wide_events";
+  private readonly progressCollection = "embedding_progress";
+  private readonly embeddedCollection = "wide_events_embedded";
 
   constructor(private readonly connection: MongoEmbeddingConnection) {
     super();
@@ -44,7 +44,7 @@ export class MongoLogAdapter extends LogStoragePort {
       const collection = this.connection.getCollection(source);
 
       const query: any = {
-        _summary: { $exists: true, $ne: '' },
+        _summary: { $exists: true, $ne: "" },
       };
 
       if (watermark) {
@@ -165,8 +165,8 @@ export class MongoLogAdapter extends LogStoragePort {
       }
 
       const vectorSearchStage: any = {
-        index: 'embedding_index',
-        path: 'embedding',
+        index: "embedding_index",
+        path: "embedding",
         queryVector: embedding,
         numCandidates: limit * 10,
         limit: limit,
@@ -185,7 +185,7 @@ export class MongoLogAdapter extends LogStoragePort {
             _id: 0,
             eventId: 1,
             summary: 1,
-            score: { $meta: 'vectorSearchScore' },
+            score: { $meta: "vectorSearchScore" },
           },
         },
       ];

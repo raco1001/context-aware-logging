@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { PaymentsOutPort } from "@payments/out-ports/index";
-import { PaymentErrorVO } from "@payments/value-objects/index";
+import { PaymentsOutPort } from "@payments/out-ports";
+import { PaymentErrorVO } from "@payments/value-objects";
 
 @Injectable()
 export class PaymentsOutAdapter implements PaymentsOutPort {

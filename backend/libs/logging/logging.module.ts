@@ -1,11 +1,8 @@
 import { Module, Global } from "@nestjs/common";
-import { LoggingService, ContextService } from "@logging/services/index";
-import {
-  MongoLogger,
-  MongoConnectionClient,
-} from "@logging/infrastructure/index";
-import { LoggerPort } from "@logging/out-ports/index";
-import { LoggingInterceptor } from "@logging/presentation/index";
+import { LoggingService, ContextService } from "libs/logging/service";
+import { MongoLogger, MongoConnectionClient } from "@logging/infrastructure";
+import { LoggerPort } from "@logging/out-ports";
+import { LoggingInterceptor } from "@logging/presentation";
 
 /**
  * LoggingModule - NestJS module for the logging library.

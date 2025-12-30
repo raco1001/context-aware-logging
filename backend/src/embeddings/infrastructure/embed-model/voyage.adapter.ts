@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { EmbeddingPort, RerankPort } from "@embeddings/out-ports/index";
-import { EmbeddingResult } from "@embeddings/domain/index";
+import { EmbeddingPort, RerankPort } from "@embeddings/out-ports";
+import { EmbeddingResult } from "@embeddings/domain";
 import { VoyageClient } from "./voyage.client";
 
 /**

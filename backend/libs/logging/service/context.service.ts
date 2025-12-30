@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { AsyncLocalStorage } from "async_hooks";
-import { LoggingContext } from "@logging/domain/index";
+import { LoggingContext } from "@logging/domain";
 
 /**
  * ContextService - Manages request-scoped logging context using AsyncLocalStorage.

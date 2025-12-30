@@ -1,13 +1,13 @@
-import { Module } from '@nestjs/common';
-import { EmbeddingUseCase, SearchUseCase } from '@embeddings/in-ports/index';
+import { Module } from "@nestjs/common";
+import { EmbeddingUseCase, SearchUseCase } from "@embeddings/in-ports";
 import {
   EmbeddingPort,
   RerankPort,
   SynthesisPort,
   ChatHistoryPort,
   LogStoragePort,
-} from '@embeddings/out-ports/index';
-import { EmbeddingService, SearchService } from '@embeddings/services/index';
+} from "@embeddings/out-ports";
+import { EmbeddingService, SearchService } from "@embeddings/service";
 import {
   VoyageAdapter,
   VoyageClient,
@@ -16,11 +16,11 @@ import {
   MongoLogAdapter,
   MongoSearchAdapter,
   MongoEmbeddingConnection,
-} from '@embeddings/infrastructure/index';
+} from "@embeddings/infrastructure";
 import {
   EmbeddingController,
   SearchController,
-} from '@embeddings/presentation/index';
+} from "@embeddings/presentation";
 
 @Module({
   controllers: [EmbeddingController, SearchController],
@@ -60,6 +60,5 @@ import {
       useClass: MongoLogAdapter,
     },
   ],
-  exports: [EmbeddingUseCase, SearchUseCase],
 })
 export class EmbeddingsModule {}

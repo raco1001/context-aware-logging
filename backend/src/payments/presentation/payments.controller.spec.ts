@@ -1,10 +1,10 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { PaymentsController } from './payments.controller';
-import { PaymentsService } from '../services/payments.service';
-import { LoggingService } from '../../../libs/logging';
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { Test, TestingModule } from "@nestjs/testing";
+import { PaymentsController } from "./payments.controller";
+import { PaymentsService } from "@payments/service";
+import { LoggingService } from "@logging/service";
+import { HttpException, HttpStatus } from "@nestjs/common";
 
-describe('PaymentsController', () => {
+describe("PaymentsController", () => {
   let controller: PaymentsController;
   let service: PaymentsService;
   let loggingService: LoggingService;
@@ -32,43 +32,43 @@ describe('PaymentsController', () => {
     loggingService = module.get<LoggingService>(LoggingService);
   });
 
-  it('should be defined', () => {
+  it("should be defined", () => {
     expect(controller).toBeDefined();
   });
 
-  describe('handlePayment', () => {
-    it('should add user context and return service result on success', async () => {
+  describe("handlePayment", () => {
+    it("should add user context and return service result on success", async () => {
       const dto = {
-        userId: 'u1',
-        role: 'admin',
+        userId: "u1",
+        role: "admin",
         amount: 100,
-        product: 'product1',
+        product: "product1",
         count: 1,
       };
-      const successResult = { success: true, transactionId: 't1' };
+      const successResult = { success: true, transactionId: "t1" };
       mockPaymentsService.processPayment.mockResolvedValue(successResult);
 
       const result = await controller.handlePayment(dto);
 
       expect(loggingService.addUserContext).toHaveBeenCalledWith({
-        id: 'u1',
-        role: 'admin',
+        id: "u1",
+        role: "admin",
       });
       expect(result).toBe(successResult);
     });
 
-    it('should throw HttpException and add error context on failure', async () => {
+    it("should throw HttpException and add error context on failure", async () => {
       const dto = {
-        userId: 'u1',
-        role: 'admin',
+        userId: "u1",
+        role: "admin",
         amount: 100,
-        product: 'product1',
+        product: "product1",
         count: 1,
       };
       const failResult = {
         success: false,
-        errorCode: 'ERR',
-        errorMessage: 'Msg',
+        errorCode: "ERR",
+        errorMessage: "Msg",
       };
       mockPaymentsService.processPayment.mockResolvedValue(failResult);
 
@@ -77,23 +77,23 @@ describe('PaymentsController', () => {
       );
 
       expect(loggingService.addError).toHaveBeenCalledWith({
-        code: 'ERR',
-        message: 'Msg',
+        code: "ERR",
+        message: "Msg",
       });
     });
 
-    it('should throw 500 for GATEWAY_TIMEOUT', async () => {
+    it("should throw 500 for GATEWAY_TIMEOUT", async () => {
       const dto = {
-        userId: 'u1',
-        role: 'admin',
+        userId: "u1",
+        role: "admin",
         amount: 100,
-        product: 'product1',
+        product: "product1",
         count: 1,
       };
       const failResult = {
         success: false,
-        errorCode: 'GATEWAY_TIMEOUT',
-        errorMessage: 'Timeout',
+        errorCode: "GATEWAY_TIMEOUT",
+        errorMessage: "Timeout",
       };
       mockPaymentsService.processPayment.mockResolvedValue(failResult);
 

@@ -1,4 +1,4 @@
-import { QueryMetadata } from '@embeddings/dtos/index';
+import { QueryMetadata } from "@embeddings/dtos";
 
 export abstract class SynthesisPort {
   /**

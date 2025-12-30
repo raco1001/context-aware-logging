@@ -1,4 +1,4 @@
-import { AnalysisResult } from '../../domain/analysis-result';
+import { AnalysisResult } from "@embeddings/domain";
 
 export abstract class ChatHistoryPort {
   /**
@@ -11,4 +11,3 @@ export abstract class ChatHistoryPort {
    */
   abstract findBySessionId(sessionId: string): Promise<AnalysisResult[]>;
 }
-

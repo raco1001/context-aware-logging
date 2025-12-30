@@ -1,4 +1,3 @@
-import { LogEmbeddingEntity } from '@embeddings/domain/index';
 export abstract class EmbeddingUseCase {
   abstract processPendingLogs(limit: number): Promise<number>;
 

@@ -1,13 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ChatHistoryPort } from '@embeddings/out-ports/index';
-import { AnalysisResult, AnalysisIntent } from '@embeddings/domain/index';
-import { MongoEmbeddingConnection } from './db.connect';
+import { Injectable, Logger } from "@nestjs/common";
+import { ChatHistoryPort } from "@embeddings/out-ports";
+import { AnalysisResult, AnalysisIntent } from "@embeddings/domain";
+import { MongoEmbeddingConnection } from "./mongo.client";
 
 @Injectable()
 export class MongoSearchAdapter extends ChatHistoryPort {
   private readonly logger = new Logger(MongoSearchAdapter.name);
-  private readonly historyCollection = 'chat_history';
-  private readonly logsCollection = 'wide_events';
+  private readonly historyCollection = "chat_history";
+  private readonly logsCollection = "wide_events";
 
   constructor(private readonly connection: MongoEmbeddingConnection) {
     super();

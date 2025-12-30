@@ -1,4 +1,4 @@
-import { AnalysisResult } from '@embeddings/domain/index';
+import { AnalysisResult } from "@embeddings/domain";
 
 export abstract class SearchUseCase {
   /**

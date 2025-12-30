@@ -4,11 +4,11 @@
  */
 
 // Module
-export { LoggingModule } from './logging.module';
+export { LoggingModule } from "./logging.module";
 
 // Services
-export { LoggingService } from './services/logging.service';
-export { ContextService } from './services/context.service';
+export { LoggingService } from "./service/logging.service";
+export { ContextService } from "./service/context.service";
 
 // Interceptors
-export { LoggingInterceptor } from './presentation/logging.interceptor';
+export { LoggingInterceptor } from "./presentation/logging.interceptor";

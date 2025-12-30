@@ -1,5 +1,5 @@
-import { WideEvent } from "@logging/domain/index";
-import { LoggingContext } from "@logging/domain/index";
+import { WideEvent } from "@logging/domain";
+import { LoggingContext } from "@logging/domain";
 /**
  * Logger interface - defines the contract for logging implementations.
  * This interface must not change, even when storage changes.

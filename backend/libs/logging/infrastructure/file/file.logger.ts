@@ -2,8 +2,8 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
 import { promises as fs } from "fs";
 import { join } from "path";
 import { ConfigService } from "@nestjs/config";
-import { LoggerPort } from "@logging/out-ports/index";
-import { WideEvent } from "@logging/domain/index";
+import { LoggerPort } from "@logging/out-ports";
+import { WideEvent } from "@logging/domain";
 
 /**
  * FileLogger - Infrastructure layer implementation of Logger interface.

@@ -1,11 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { SynthesisPort } from "@embeddings/out-ports/index";
-import { QueryMetadata } from "@embeddings/dtos/index";
-import {
-  RULES,
-  OUTPUT_FORMAT,
-  INSTRUCTIONS,
-} from "@embeddings/value-objects/index";
+import { SynthesisPort } from "@embeddings/out-ports";
+import { QueryMetadata } from "@embeddings/dtos";
+import { RULES, OUTPUT_FORMAT, INSTRUCTIONS } from "@embeddings/value-objects";
 import { GeminiClient } from "./gemini.client";
 
 /**

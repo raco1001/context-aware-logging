@@ -1,8 +1,8 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
-import { LoggerPort } from "@logging/out-ports/index";
-import { WideEvent, LoggingContext, Latency } from "@logging/domain/index";
+import { LoggerPort } from "@logging/out-ports";
+import { WideEvent, LoggingContext, Latency } from "@logging/domain";
 import { ContextService } from "./context.service";
-import { LatencyBucket } from "@logging/value-objects/index";
+import { LatencyBucket } from "@logging/value-objects";
 
 /**
  * LoggingService - Application layer service for managing Wide Events.

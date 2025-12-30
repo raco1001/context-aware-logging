@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
-import { PaymentsController } from '@payments/presentation/index';
-import { PaymentsService } from '@payments/services/index';
-import { PaymentsOutAdapter } from '@payments/infrastructure/index';
-import { PaymentsOutPort } from '@payments/out-ports/index';
-import { PaymentsServicePort } from '@payments/in-ports/index';
+import { Module } from "@nestjs/common";
+import { PaymentsController } from "@payments/presentation";
+import { PaymentsService } from "@payments/service";
+import { PaymentsOutAdapter } from "@payments/infrastructure";
+import { PaymentsOutPort } from "@payments/out-ports";
+import { PaymentsServicePort } from "@payments/in-ports";
 
 @Module({
   controllers: [PaymentsController],

@@ -5,10 +5,10 @@ import {
   HttpException,
   HttpStatus,
 } from "@nestjs/common";
-import { PaymentsServicePort } from "@payments/in-ports/index";
-import { PaymentRequest } from "@payments/dtos/index";
-import { LoggingService } from "@logging/services/index";
-import { Service } from "@logging/presentation/service.decorator";
+import { PaymentsServicePort } from "@payments/in-ports";
+import { PaymentRequest } from "@payments/dtos";
+import { LoggingService } from "@logging/service";
+import { Service } from "@logging/presentation";
 
 @Controller("payments")
 @Service("payments")

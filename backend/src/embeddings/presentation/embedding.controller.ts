@@ -7,9 +7,9 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
-import { EmbeddingUseCase } from "@embeddings/in-ports/index";
+import { EmbeddingUseCase } from "@embeddings/in-ports";
 import { ConfigService } from "@nestjs/config";
-import { Service } from "@logging/presentation/service.decorator";
+import { Service } from "@logging/presentation";
 
 @Controller("embeddings")
 @Service("embeddings")

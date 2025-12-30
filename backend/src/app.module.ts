@@ -1,17 +1,18 @@
-import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { LoggingModule, LoggingInterceptor } from '@logging/index';
-import { PaymentsModule } from '@payments/payments.module';
-import { EmbeddingsModule } from '@embeddings/embeddings.module';
+import { Module } from "@nestjs/common";
+import { APP_INTERCEPTOR } from "@nestjs/core";
+import { ConfigModule } from "@nestjs/config";
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
+import { LoggingModule } from "@logging";
+import { LoggingInterceptor } from "@logging/presentation";
+import { PaymentsModule } from "@payments";
+import { EmbeddingsModule } from "@embeddings";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ".env",
     }),
     LoggingModule,
     PaymentsModule,

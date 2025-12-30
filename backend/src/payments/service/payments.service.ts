@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
-import { PaymentsServicePort } from "@payments/in-ports/index";
-import { PaymentsOutPort } from "@payments/out-ports/index";
-import { PaymentRequest, PaymentResult } from "@payments/dtos/index";
+import { PaymentsServicePort } from "@payments/in-ports";
+import { PaymentsOutPort } from "@payments/out-ports";
+import { PaymentRequest, PaymentResult } from "@payments/dtos";
 
 @Injectable()
 export class PaymentsService extends PaymentsServicePort {

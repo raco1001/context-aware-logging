@@ -1,5 +1,5 @@
-import { LogEmbeddingEntity } from "@embeddings/domain/index";
-import { QueryMetadata } from "@embeddings/dtos/index";
+import { LogEmbeddingEntity } from "@embeddings/domain";
+import { QueryMetadata } from "@embeddings/dtos";
 
 /**
  * Watermark info for tracking embedding progress.

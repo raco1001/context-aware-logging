@@ -10,8 +10,7 @@ import { Observable, throwError } from "rxjs";
 import { catchError, finalize } from "rxjs/operators";
 import { Request } from "express";
 import { randomUUID } from "crypto";
-import { LoggingService } from "@logging/services/index";
-import { ContextService } from "@logging/services/index";
+import { LoggingService, ContextService } from "libs/logging/service";
 
 /**
  * LoggingInterceptor - Automatically logs every HTTP request as a Wide Event.

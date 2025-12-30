@@ -1,17 +1,17 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { SearchUseCase } from "@embeddings/in-ports/index";
+import { SearchUseCase } from "@embeddings/in-ports";
 import {
   EmbeddingPort,
   RerankPort,
   SynthesisPort,
   ChatHistoryPort,
   LogStoragePort,
-} from "@embeddings/out-ports/index";
-import { AnalysisResult, AnalysisIntent } from "@embeddings/domain/index";
+} from "@embeddings/out-ports";
+import { AnalysisResult, AnalysisIntent } from "@embeddings/domain";
 import {
   SEMANTIC_KEYWORDS,
   STATISTIC_KEYWORDS,
-} from "@embeddings/value-objects/index";
+} from "@embeddings/value-objects";
 
 @Injectable()
 export class SearchService extends SearchUseCase {
