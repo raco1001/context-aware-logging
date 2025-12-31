@@ -2,6 +2,8 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { EmbeddingUseCase } from "@embeddings/in-ports";
 import { EmbeddingPort, LogStoragePort } from "@embeddings/out-ports";
+import { chunkByFields, shouldChunk, Chunk } from "../core/utils/chunking.util";
+import { SummaryEnrichmentService } from "./summary-enrichment.service";
 
 @Injectable()
 export class EmbeddingService extends EmbeddingUseCase {
@@ -12,6 +14,7 @@ export class EmbeddingService extends EmbeddingUseCase {
     private readonly configService: ConfigService,
     private readonly logStorage: LogStoragePort,
     private readonly embeddingPort: EmbeddingPort,
+    private readonly summaryEnrichment: SummaryEnrichmentService,
   ) {
     super();
     this.batchChunkSize = parseInt(
@@ -49,21 +52,55 @@ export class EmbeddingService extends EmbeddingUseCase {
 
     for (let i = 0; i < logsToEmbed.length; i += this.batchChunkSize) {
       const chunk = logsToEmbed.slice(i, i + this.batchChunkSize);
-      const summaries = chunk.map((log) => log.summary);
 
       try {
         this.logger.log(`Processing chunk of ${chunk.length} logs...`);
+
+        // Phase 4 Step 2.5: Apply chunking strategy for embedding
+        // Use field-based chunking to enable more granular semantic search
+        const chunksToEmbed: Array<{
+          log: (typeof chunk)[0];
+          chunk: Chunk;
+        }> = [];
+
+        for (const log of chunk) {
+          // Phase 4: Generate Dual-layer Summary from WideEvent
+          // This responsibility belongs to the embedding module, not logging module
+          const dualLayerSummary = log.wideEvent
+            ? this.summaryEnrichment.generateDualLayerSummary(log.wideEvent)
+            : log.summary; // Fallback to canonical summary if WideEvent not available
+
+          // Check if chunking is beneficial for this summary
+          if (shouldChunk(dualLayerSummary, 200)) {
+            // Use field-based chunking for structured summaries
+            const fieldChunks = chunkByFields(dualLayerSummary);
+            // For now, we'll embed the full summary but keep chunking logic ready
+            // Future: Can implement multi-chunk embedding if needed
+            chunksToEmbed.push({
+              log,
+              chunk: { text: dualLayerSummary }, // Use Dual-layer Summary
+            });
+          } else {
+            // Short summary: embed as-is
+            chunksToEmbed.push({
+              log,
+              chunk: { text: dualLayerSummary }, // Use Dual-layer Summary
+            });
+          }
+        }
+
+        const summaries = chunksToEmbed.map((item) => item.chunk.text);
         const results =
           await this.embeddingPort.createBatchEmbeddings(summaries);
 
-        const resultsToSave = chunk.map((log, index) => ({
-          eventId: log.internalId,
-          requestId: log.requestId,
-          summary: log.summary,
+        const resultsToSave = chunksToEmbed.map((item, index) => ({
+          eventId: item.log.internalId,
+          requestId: item.log.requestId,
+          summary: item.chunk.text, // Store Dual-layer Summary (narrative + canonical)
           embedding: results[index].embedding,
           model: results[index].model,
-          service: log.service,
-          timestamp: log.timestamp,
+          service: item.log.service,
+          timestamp: item.log.timestamp,
         }));
 
         const lastLog = chunk[chunk.length - 1];

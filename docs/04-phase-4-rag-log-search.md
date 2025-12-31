@@ -11,11 +11,12 @@ Focus on the core RAG value proposition: **"Search -> Explain"**. The system mus
 The heart of Phase 4. It focuses on finding relevant context and synthesizing a summary.
 
 - **Workflow**:
-  1. Natural Language → Voyage AI Embedding.
-  2. MongoDB Atlas Vector Search (`wide_events_embedded`).
-  3. **Voyage AI Rerank** (`rerank-2`): Re-order top candidates for maximum relevance.
-  4. **Grounding Pack**: Fetch full context from `wide_events` by `requestId`.
-  5. **Gemini 1.5 Flash Synthesis**: Generate response strictly based on the Grounding Pack.
+  1. Natural Language Query → **Query Preprocessing** (transform to structured format matching `_summary`).
+  2. Structured Query → Voyage AI Embedding.
+  3. MongoDB Atlas Vector Search (`wide_events_embedded`).
+  4. **Voyage AI Rerank** (`rerank-2`): Re-order top candidates for maximum relevance.
+  5. **Grounding Pack**: Fetch full context from `wide_events` by `requestId`.
+  6. **Gemini 1.5 Flash Synthesis**: Generate response strictly based on the Grounding Pack.
 
 ### Path A: Structured Engine (Secondary - Template-based)
 
@@ -68,6 +69,32 @@ To prevent hallucinations, the context provided to Gemini 1.5 Flash is strictly 
 - **Intent-based Extraction**: LLM extracts time ranges (e.g., "last 1h", "yesterday"), service names, error codes, and error presence flags from the query.
 - **MongoDB Pre-filtering**: Apply extracted metadata (time, service) to the `$vectorSearch` filter to eliminate noise and increase precision.
 - **Post-filtering (Grounding Stage)**: After retrieving full log documents, apply error-related filters (`hasError`, `errorCode`) to ensure only relevant logs are included in the synthesis context.
+
+### Step 2.5: Query Preprocessing & Embedding Strategy Improvement - [Completed]
+
+- **Query Preprocessing**: Natural language queries are transformed into structured format matching the `_summary` format used for log embeddings.
+  - Example: `"are there any failed cases of the service 'payment' today?"` → `"Outcome: FAILED, Service: payment, Error: ANY, ErrorMessage: ANY, UserRole: ANY, LatencyBucket: ANY"`
+  - This ensures queries and documents use similar structured representations in the embedding space, improving semantic matching.
+- **Chunking Utilities**: Added utilities for splitting long or complex log summaries into smaller, semantically meaningful chunks (based on MongoDB RAG tutorial Step 3).
+  - Available strategies: `chunkSummary()`, `createOverlappingChunks()`, `chunkByFields()`
+  - Currently using single-chunk strategy (current `_summary` format is concise), but utilities are available for future expansion.
+
+### Step 2.6: Dual-layer Summary Strategy - [Completed]
+
+- **Dual-layer Summary**: Implements industry-standard approach combining deterministic canonical signals with lightweight narrative surface.
+  - **Narrative Layer**: Template-based natural language sentence (e.g., "A premium user experienced a payment failure during checkout due to GATEWAY_TIMEOUT.")
+    - Provides "language surface" for natural language query matching
+    - Generated deterministically without LLM (maintains reproducibility)
+  - **Canonical Layer**: Structured field-based format (e.g., "Outcome: FAILED, Service: payments, Route: /payments/checkout, ...")
+    - Provides stable semantic axes for statistics, aggregation, and filtering
+  - **Combined Format**: `{narrative}\n\n{canonical}` - Both layers embedded together
+  - **Benefits**:
+    - Natural language queries match better (keywords like "failed", "payment", "premium" appear directly)
+    - Structured information preserved for filtering and aggregation
+    - Deterministic and reproducible (no LLM inference at ingestion time)
+- **Grounding Fields**: Added `requestId` and `timestamp` to `wide_events_embedded` collection for accurate source retrieval.
+  - Enables precise linking back to original `wide_events` documents
+  - Supports traceability and evidence-based answers
 
 ### Step 3: Conversational RAG (Multi-turn Context)
 

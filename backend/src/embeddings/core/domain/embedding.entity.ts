@@ -1,4 +1,5 @@
 import { EmbeddingStatus } from "@logging/value-objects";
+import { WideEvent } from "@logging/domain";
 
 /**
  * Result of an embedding operation.
@@ -24,6 +25,7 @@ export class LogEmbeddingEntity {
     public readonly service?: string,
     public readonly model?: string,
     public readonly embedding?: number[],
+    public readonly wideEvent?: WideEvent, // Full WideEvent for Dual-layer Summary generation
   ) {}
 
   /**

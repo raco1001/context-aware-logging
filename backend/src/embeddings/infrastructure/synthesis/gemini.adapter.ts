@@ -43,6 +43,7 @@ export class GeminiAdapter extends SynthesisPort {
         startTime: parsed.startTime ? new Date(parsed.startTime) : null,
         endTime: parsed.endTime ? new Date(parsed.endTime) : null,
         service: parsed.service || null,
+        route: parsed.route || null,
         errorCode: parsed.errorCode || null,
         hasError: parsed.hasError === true || false,
       };
@@ -52,6 +53,7 @@ export class GeminiAdapter extends SynthesisPort {
         startTime: null,
         endTime: null,
         service: null,
+        route: null,
         errorCode: null,
         hasError: false,
       };
@@ -60,17 +62,59 @@ export class GeminiAdapter extends SynthesisPort {
 
   async synthesize(
     query: string,
-    contexts: any[],
+    contexts: any[] | { aggregationResults?: any; contextLogs?: any[] },
     history: any[] = [],
   ): Promise<{ answer: string; confidence: number }> {
     try {
-      this.logger.log(
-        `Synthesizing answer for query: "${query}" with ${contexts.length} contexts`,
-      );
+      // Check if contexts is aggregation results or regular log contexts
+      const isAggregationResult =
+        contexts &&
+        typeof contexts === "object" &&
+        !Array.isArray(contexts) &&
+        ("aggregationResults" in contexts || "contextLogs" in contexts);
 
-      const contextText = contexts
-        .map((ctx, i) => `[Document ${i + 1}]\n${JSON.stringify(ctx, null, 2)}`)
-        .join("\n\n");
+      let contextText: string;
+      let contextType: string;
+
+      if (isAggregationResult) {
+        const aggregationData = contexts as {
+          aggregationResults?: any;
+          contextLogs?: any[];
+        };
+        contextType = "aggregation";
+        this.logger.log(
+          `Synthesizing answer for aggregation query: "${query}" with ${aggregationData.aggregationResults?.length || 0} aggregation results and ${aggregationData.contextLogs?.length || 0} context logs`,
+        );
+
+        // Format aggregation results
+        const aggregationText = aggregationData.aggregationResults
+          ? `[Aggregation Results]\n${JSON.stringify(aggregationData.aggregationResults, null, 2)}`
+          : "";
+
+        // Format context logs if available
+        const contextLogsText = aggregationData.contextLogs
+          ? aggregationData.contextLogs
+              .map(
+                (ctx, i) =>
+                  `[Context Log ${i + 1}]\n${JSON.stringify(ctx, null, 2)}`,
+              )
+              .join("\n\n")
+          : "";
+
+        contextText = [aggregationText, contextLogsText]
+          .filter(Boolean)
+          .join("\n\n");
+      } else {
+        contextType = "semantic";
+        const contextsArray = contexts as any[];
+        this.logger.log(
+          `Synthesizing answer for semantic query: "${query}" with ${contextsArray.length} contexts`,
+        );
+
+        contextText = contextsArray
+          .map((ctx, i) => `[Document ${i + 1}]\n${JSON.stringify(ctx, null, 2)}`)
+          .join("\n\n");
+      }
 
       const historyText =
         history.length > 0
@@ -78,18 +122,36 @@ export class GeminiAdapter extends SynthesisPort {
           : "";
       const rules = RULES;
       const outputFormat = OUTPUT_FORMAT;
+
+      // Add aggregation-specific instructions
+      const aggregationInstructions =
+        contextType === "aggregation"
+          ? `
+        [Aggregation Instructions]
+        - The provided data contains statistical aggregation results (e.g., error code counts, top N analysis).
+        - Present the results in a clear, structured format (e.g., numbered list, table).
+        - For each aggregated item, provide:
+          1. The main metric (e.g., error code name)
+          2. The count/frequency
+          3. Brief explanation based on example logs if available
+        - Use Korean if the question is in Korean, English if the question is in English.
+        - Be concise but informative.
+        `
+          : "";
+
       const prompt = `
         You are an expert SRE and Log Analysis Assistant.
-        Your goal is to answer the user's question based STRICTLY on the provided log contexts.
+        Your goal is to answer the user's question based STRICTLY on the provided ${contextType === "aggregation" ? "aggregation results and log contexts" : "log contexts"}.
 
         [Rules]
         ${rules}
+        ${aggregationInstructions}
 
         [Question]
         ${query}
         ${historyText}
 
-        [Log Contexts]
+        ${contextType === "aggregation" ? "[Aggregation Results and Context Logs]" : "[Log Contexts]"}
         ${contextText}
 
         [Output Format]

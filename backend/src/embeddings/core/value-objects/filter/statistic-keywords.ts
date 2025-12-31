@@ -17,6 +17,17 @@ export const STATISTIC_KEYWORDS = [
   '개수',
   'count',
   'rate',
+  '상위',
+  'top',
+  '주요',
+  '원인',
+  'frequent',
+  'most',
+  'common',
+  'group',
+  '그룹',
+  '집계',
+  'aggregate',
 ];
 export const SEMANTIC_KEYWORDS = [
   'why',

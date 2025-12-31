@@ -7,7 +7,13 @@ import {
   ChatHistoryPort,
   LogStoragePort,
 } from "@embeddings/out-ports";
-import { EmbeddingService, SearchService } from "@embeddings/service";
+import {
+  EmbeddingService,
+  SearchService,
+  QueryPreprocessorService,
+  SummaryEnrichmentService,
+  AggregationService,
+} from "@embeddings/service";
 import {
   VoyageAdapter,
   VoyageClient,
@@ -29,6 +35,12 @@ import {
     VoyageClient,
     GeminiClient,
     MongoEmbeddingClient,
+    // Query Preprocessing Service
+    QueryPreprocessorService,
+    // Summary Enrichment Service
+    SummaryEnrichmentService,
+    // Aggregation Service
+    AggregationService,
     // Services (Inbound Ports, Use Cases)
     {
       provide: EmbeddingUseCase,

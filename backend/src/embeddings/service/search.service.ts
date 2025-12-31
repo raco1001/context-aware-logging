@@ -12,6 +12,8 @@ import {
   SEMANTIC_KEYWORDS,
   STATISTIC_KEYWORDS,
 } from "@embeddings/value-objects";
+import { QueryPreprocessorService } from "./query-preprocessor.service";
+import { AggregationService } from "./aggregation.service";
 
 @Injectable()
 export class SearchService extends SearchUseCase {
@@ -23,6 +25,8 @@ export class SearchService extends SearchUseCase {
     private readonly synthesisPort: SynthesisPort,
     private readonly chatHistoryPort: ChatHistoryPort,
     private readonly logStoragePort: LogStoragePort,
+    private readonly queryPreprocessor: QueryPreprocessorService,
+    private readonly aggregationService: AggregationService,
   ) {
     super();
   }
@@ -42,56 +46,203 @@ export class SearchService extends SearchUseCase {
       const metadata = await this.synthesisPort.extractMetadata(query);
       const intent = this.classifyIntent(query);
       this.logger.log(`Extracted metadata: ${JSON.stringify(metadata)}`);
+      this.logger.log(`Detected intent: ${intent}`);
 
-      const { embedding } = await this.embeddingPort.createEmbedding(query);
-      const vectorResults = await this.logStoragePort.vectorSearch(
-        embedding,
-        10,
-        metadata,
-      );
-
-      if (!vectorResults || vectorResults.length === 0) {
-        return this.createEmptyResult(query, intent, sessionId);
+      // Route to statistical or semantic handler
+      if (intent === AnalysisIntent.STATISTICAL) {
+        return await this.handleStatisticalQuery(query, metadata, sessionId);
       }
 
-      const documentsForRerank = vectorResults.map((res) => res.summary);
-      const rerankedIndices = await this.rerankPort.rerank(
-        query,
-        documentsForRerank,
-        5,
+      // Default to semantic query handling
+      return await this.handleSemanticQuery(query, metadata, sessionId);
+    } catch (error) {
+      this.logger.error(`RAG process failed: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Handles semantic queries using vector search + rerank + synthesis.
+   */
+  private async handleSemanticQuery(
+    query: string,
+    metadata: any,
+    sessionId?: string,
+  ): Promise<AnalysisResult> {
+    const intent = AnalysisIntent.SEMANTIC;
+
+    const structuredQuery = this.queryPreprocessor.preprocessQuery(
+      query,
+      metadata,
+    );
+    this.logger.log(
+      `\n\n 
+        Original query: "${query}" \n\n
+        -> Structured query: "${structuredQuery}" \n\n`,
+    );
+
+    const { embedding } =
+      await this.embeddingPort.createEmbedding(structuredQuery);
+
+    this.logger.log(
+      `Performing vector search with embedding (dimension: ${embedding.length}), metadata: ${JSON.stringify(metadata)}`,
+    );
+
+    const vectorResults = await this.logStoragePort.vectorSearch(
+      embedding,
+      10,
+      metadata,
+    );
+
+    this.logger.log(
+      `Vector search returned ${vectorResults?.length || 0} results`,
+    );
+
+    if (!vectorResults || vectorResults.length === 0) {
+      this.logger.warn(
+        `No vector search results found. This could mean:
+          1. No embeddings exist in wide_events_embedded collection
+          2. Service filter is too strict (filtering by: ${metadata.service || "none"})
+          3. Vector search index may not be properly configured
+          Consider running: POST /embeddings/batch?limit=100 to create embeddings`,
       );
+      return this.createEmptyResult(query, intent, sessionId);
+    }
 
-      const topResults = rerankedIndices.map(
-        (item) => vectorResults[item.index],
+    if (vectorResults.length > 0) {
+      this.logger.log(
+        `Top 3 vector search results:\n${vectorResults
+          .slice(0, 3)
+          .map(
+            (r, i) =>
+              `  ${i + 1}. Score: ${r.score?.toFixed(4) || "N/A"}, Summary: ${r.summary?.substring(0, 100) || "N/A"}`,
+          )
+          .join("\n")}`,
       );
+    }
 
-      const eventIds = topResults.map((res) => res.eventId);
+    const documentsForRerank = vectorResults.map((res) => res.summary);
+    const rerankedIndices = await this.rerankPort.rerank(
+      query,
+      documentsForRerank,
+      5,
+    );
+    this.logger.log(
+      `Reranked indices: ${JSON.stringify(rerankedIndices, null, 2)}`,
+    );
+    const topResults = rerankedIndices.map((item) => vectorResults[item.index]);
 
-      let fullLogs = await this.logStoragePort.getLogsByEventIds(eventIds);
+    this.logger.log(`Top results: ${JSON.stringify(topResults, null, 2)}`);
 
-      // Post-filtering: Apply error-related filters after grounding
-      if (metadata.hasError || metadata.errorCode) {
-        fullLogs = fullLogs.filter((log) => {
-          // If hasError is true, filter logs that have an error field
-          if (metadata.hasError && !log.error) {
-            return false;
-          }
-          // If errorCode is specified, match the error code
-          if (metadata.errorCode && log.error?.code !== metadata.errorCode) {
-            return false;
-          }
-          return true;
-        });
+    const eventIds = topResults.map((res) => res.eventId);
 
-        // If filtering removed all results, log a warning
-        if (fullLogs.length === 0) {
-          this.logger.warn(
-            `Post-filtering removed all results. Original count: ${eventIds.length}, Filtered: 0`,
-          );
+    let fullLogs = await this.logStoragePort.getLogsByEventIds(eventIds);
+    this.logger.log(`Full logs: ${JSON.stringify(fullLogs, null, 2)}`);
+    if (metadata.hasError || metadata.errorCode) {
+      fullLogs = fullLogs.filter((log) => {
+        if (metadata.hasError && !log.error) {
+          return false;
         }
+        if (metadata.errorCode && log.error?.code !== metadata.errorCode) {
+          return false;
+        }
+        return true;
+      });
+      this.logger.log(`Filtered logs: ${JSON.stringify(fullLogs, null, 2)}`);
+      if (fullLogs.length === 0) {
+        this.logger.warn(
+          `Post-filtering removed all results. Original count: ${eventIds.length}, Filtered: 0`,
+        );
+      }
+    }
+
+    const requestIds = fullLogs.map((log) => log.requestId).filter(Boolean);
+
+    const history = sessionId
+      ? await this.chatHistoryPort.findBySessionId(sessionId)
+      : [];
+
+    const { answer, confidence } = await this.synthesisPort.synthesize(
+      query,
+      fullLogs,
+      history,
+    );
+
+    const result: AnalysisResult = {
+      question: query,
+      intent,
+      answer,
+      sources: requestIds,
+      confidence,
+      sessionId,
+    };
+
+    if (sessionId) {
+      await this.chatHistoryPort.save(result);
+    }
+
+    return result;
+  }
+
+  /**
+   * Handles statistical/aggregation queries using MongoDB aggregation pipelines.
+   */
+  private async handleStatisticalQuery(
+    query: string,
+    metadata: any,
+    sessionId?: string,
+  ): Promise<AnalysisResult> {
+    const intent = AnalysisIntent.STATISTICAL;
+    this.logger.log(`Handling statistical query: "${query}"`);
+
+    try {
+      // Parse aggregation type from query
+      const aggregationType = this.parseAggregationType(query);
+      this.logger.log(`Detected aggregation type: ${aggregationType}`);
+
+      let aggregationResults: any;
+      let contextLogs: any[] = [];
+
+      // Execute appropriate aggregation
+      if (aggregationType === "error_code_top_n") {
+        const topN = this.extractTopN(query) || 5;
+        aggregationResults =
+          await this.aggregationService.aggregateErrorCodesByCount(
+            metadata,
+            topN,
+          );
+      } else if (aggregationType === "error_by_route") {
+        const topN = this.extractTopN(query) || 5;
+        aggregationResults =
+          await this.aggregationService.aggregateErrorsByRoute(metadata, topN);
+      } else if (aggregationType === "error_by_service") {
+        aggregationResults =
+          await this.aggregationService.aggregateErrorsByService(metadata);
+      } else {
+        // Default to error code aggregation
+        const topN = this.extractTopN(query) || 5;
+        aggregationResults =
+          await this.aggregationService.aggregateErrorCodesByCount(
+            metadata,
+            topN,
+          );
       }
 
-      const requestIds = fullLogs.map((log) => log.requestId).filter(Boolean);
+      // Optionally get context logs for better synthesis
+      if (aggregationResults && aggregationResults.length > 0) {
+        const { embedding } = await this.embeddingPort.createEmbedding(query);
+        contextLogs = await this.logStoragePort.vectorSearch(
+          embedding,
+          5,
+          metadata,
+        );
+      }
+
+      // Prepare context for synthesis
+      const synthesisContext = {
+        aggregationResults,
+        contextLogs: contextLogs.slice(0, 5),
+      };
 
       const history = sessionId
         ? await this.chatHistoryPort.findBySessionId(sessionId)
@@ -99,9 +250,20 @@ export class SearchService extends SearchUseCase {
 
       const { answer, confidence } = await this.synthesisPort.synthesize(
         query,
-        fullLogs,
+        [synthesisContext],
         history,
       );
+
+      // Extract source requestIds from aggregation results
+      const requestIds = aggregationResults
+        ? aggregationResults
+            .flatMap((result: any) =>
+              result.examples
+                ? result.examples.map((ex: any) => ex.requestId)
+                : [],
+            )
+            .filter(Boolean)
+        : [];
 
       const result: AnalysisResult = {
         question: query,
@@ -118,7 +280,10 @@ export class SearchService extends SearchUseCase {
 
       return result;
     } catch (error) {
-      this.logger.error(`RAG process failed: ${error.message}`, error.stack);
+      this.logger.error(
+        `Statistical query handling failed: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -128,16 +293,106 @@ export class SearchService extends SearchUseCase {
   }
 
   private classifyIntent(query: string): AnalysisIntent {
+    const lowerQuery = query.toLowerCase();
     const statisticalKeywords = STATISTIC_KEYWORDS;
     const semanticKeywords = SEMANTIC_KEYWORDS;
 
-    if (statisticalKeywords.some((k) => query.toLowerCase().includes(k))) {
+    // Enhanced aggregation keywords
+    const aggregationKeywords = [
+      "상위",
+      "top",
+      "주요",
+      "원인",
+      "frequent",
+      "most",
+      "common",
+      "group",
+      "그룹",
+      "집계",
+      "aggregate",
+      "통계",
+      "statistics",
+    ];
+
+    // Check for aggregation patterns
+    if (
+      aggregationKeywords.some((k) => lowerQuery.includes(k)) ||
+      statisticalKeywords.some((k) => lowerQuery.includes(k))
+    ) {
       return AnalysisIntent.STATISTICAL;
-    } else if (semanticKeywords.some((k) => query.toLowerCase().includes(k))) {
+    } else if (semanticKeywords.some((k) => lowerQuery.includes(k))) {
       return AnalysisIntent.SEMANTIC;
     }
 
     return AnalysisIntent.UNKNOWN;
+  }
+
+  /**
+   * Parses the aggregation type from the query.
+   * Returns: "error_code_top_n", "error_by_route", "error_by_service", or "unknown"
+   */
+  private parseAggregationType(query: string): string {
+    const lowerQuery = query.toLowerCase();
+
+    // Check for error code aggregation patterns
+    if (
+      lowerQuery.includes("원인") ||
+      lowerQuery.includes("error code") ||
+      lowerQuery.includes("에러 코드") ||
+      (lowerQuery.includes("에러") && lowerQuery.includes("상위"))
+    ) {
+      return "error_code_top_n";
+    }
+
+    // Check for route aggregation patterns
+    if (
+      lowerQuery.includes("route") ||
+      lowerQuery.includes("경로") ||
+      lowerQuery.includes("엔드포인트")
+    ) {
+      return "error_by_route";
+    }
+
+    // Check for service aggregation patterns
+    if (
+      lowerQuery.includes("service") ||
+      lowerQuery.includes("서비스") ||
+      lowerQuery.includes("별")
+    ) {
+      return "error_by_service";
+    }
+
+    // Default to error code aggregation
+    return "error_code_top_n";
+  }
+
+  /**
+   * Extracts the "top N" number from the query.
+   * Returns the number if found, otherwise null.
+   */
+  private extractTopN(query: string): number | null {
+    const lowerQuery = query.toLowerCase();
+
+    // Patterns: "상위 5개", "top 5", "5개", "5 개"
+    const patterns = [
+      /상위\s*(\d+)/,
+      /top\s*(\d+)/,
+      /(\d+)\s*개/,
+      /(\d+)\s*개만/,
+      /(\d+)\s*개에\s*대해서만/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = lowerQuery.match(pattern);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > 0) {
+          return num;
+        }
+      }
+    }
+
+    return null;
   }
 
   private createEmptyResult(

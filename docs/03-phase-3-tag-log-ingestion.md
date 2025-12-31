@@ -30,18 +30,40 @@ This phase intentionally avoids inference-time intelligence and focuses on produ
 
 ## Semantic Serialization (`_summary`)
 
-A deterministic `_summary` field is generated using existing Wide Event data. This summary is not a human narrative, but a semantic descriptor optimized for vector embedding, semantic similarity, and explainable retrieval.
+A deterministic `_summary` field is generated using existing Wide Event data. Phase 4 enhancement implements a **Dual-layer Summary** strategy that combines deterministic canonical signals with lightweight narrative surface to balance reproducibility and natural language recall.
+
+### Dual-layer Summary Structure
+
+The semantic summary intentionally combines a deterministic signal layer with a lightweight narrative surface to balance reproducibility and natural language recall.
+
+**Narrative Layer** (Natural Language Surface):
+- Template-based sentence generation (deterministic, no LLM)
+- Provides "language surface" for natural language query matching
+- Example: "A premium user experienced a payment failure during checkout due to GATEWAY_TIMEOUT."
+
+**Canonical Layer** (Structured Signals):
+- Field-based structured format
+- Provides stable semantic axes for statistics, aggregation, and filtering
+- Example: "Outcome: FAILED, Service: payments, Route: /payments/checkout, Error: GATEWAY_TIMEOUT, ..."
+
+**Combined Format**:
+```
+{narrative}
+
+{canonical}
+```
 
 ### Summary Construction Example
 
 ```ts
-const summary = `Outcome: ${error ? 'FAILED' : 'SUCCESS'}
-   Service: ${service}
-   Route: ${route}
-   Error: ${error?.code ?? 'NONE'},
-   ErrorMessage: ${error?.message ?? 'NONE'}
-   UserRole: ${user?.role ?? 'ANONYMOUS'}
-   LatencyBucket: ${bucket(durationMs)}`
+// Narrative Layer (template-based, deterministic)
+const narrative = `A ${roleName} user experienced a ${serviceName} failure during ${routeName} due to ${errorDesc}.`;
+
+// Canonical Layer (structured fields)
+const canonical = `Outcome: ${outcome}, Service: ${service}, Route: ${route}, Error: ${errorCode}, ErrorMessage: ${errorMessage}, UserRole: ${userRole}, LatencyBucket: ${latencyBucket}`;
+
+// Dual-layer Summary
+const summary = `${narrative}\n\n${canonical}`;
 ```
 
 ### Design Notes
@@ -50,6 +72,8 @@ const summary = `Outcome: ${error ? 'FAILED' : 'SUCCESS'}
 - **Controlled Vocabulary**: Uses stable terms rather than free-form text.
 - **Structural Stability**: Values change, but the structure does not.
 - **Bucketing**: Numeric values (like duration) are bucketed to improve semantic stability.
+- **Deterministic Narrative**: Template-based generation ensures reproducibility (no LLM inference at ingestion time).
+- **Language Surface**: Narrative layer provides direct keyword matching for natural language queries.
 
 ## Implementation Notes
 

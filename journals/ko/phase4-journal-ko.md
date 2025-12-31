@@ -1,5 +1,9 @@
 ## memo
 
+---
+
+### 2025-12-30
+
 - plan
 
   ```json
@@ -131,4 +135,305 @@ curl -G "http://localhost:3000/search/ask"      --data-urlencode "q=are there an
 7. 문서 업데이트
    04-phase-4-rag-log-search.md에 Step 2 확장 내용 반영
    기술 구현 단계 및 성공 기준 명시
+```
+
+---
+
+### 2025-12-31
+
+- 문제점
+
+```bash
+
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [SearchService] Performing vector search with embedding (dimension: 512), metadata: {"startTime":"2025-11-30T00:00:00.000Z","endTime":"2025-12-31T00:00:00.000Z","service":"payment","route":null,"errorCode":null,"hasError":true}
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [MongoLogAdapter] Vector search: Collection "wide_events_embedded" has 229 documents
+[Nest] 48412  - 12/31/2025, 6:06:51 PM   DEBUG [MongoLogAdapter] Applying service filter: "payment"
+[Nest] 48412  - 12/31/2025, 6:06:51 PM   DEBUG [MongoLogAdapter] Vector search filter: {"createdAt":{"$gte":"2025-11-30T00:00:00.000Z","$lte":"2025-12-31T00:00:00.000Z"},"service":"payment"}
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [MongoLogAdapter] Vector search completed: 0 results (requested: 10)
+[Nest] 48412  - 12/31/2025, 6:06:51 PM    WARN [MongoLogAdapter] No results with service filter "payment". Trying without service filter...
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [MongoLogAdapter] Fallback search (without service filter) returned 10 results
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [SearchService] Vector search returned 10 results
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [SearchService] Top 3 vector search results:
+  1. Score: 0.9239, Summary: Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRol
+  2. Score: 0.9239, Summary: Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRol
+  3. Score: 0.9239, Summary: Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRol
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [SearchService] Reranked indices: [
+  {
+    "index": 0,
+    "relevance_score": 0.57421875
+  },
+  {
+    "index": 1,
+    "relevance_score": 0.57421875
+  },
+  {
+    "index": 2,
+    "relevance_score": 0.57421875
+  },
+  {
+    "index": 3,
+    "relevance_score": 0.57421875
+  },
+  {
+    "index": 4,
+    "relevance_score": 0.57421875
+  }
+]
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [SearchService] Top results: [
+  {
+    "eventId": "6953c4cc758c23bce07d9639",
+    "summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS",
+    "score": 0.9238767623901367
+  },
+  {
+    "eventId": "6953c4cb758c23bce07d9633",
+    "summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS",
+    "score": 0.9238767623901367
+  },
+  {
+    "eventId": "6953c4cb758c23bce07d962b",
+    "summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS",
+    "score": 0.9238767623901367
+  },
+  {
+    "eventId": "6953c4cb758c23bce07d9628",
+    "summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS",
+    "score": 0.9238767623901367
+  },
+  {
+    "eventId": "6953c4cb758c23bce07d9627",
+    "summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS",
+    "score": 0.9238767623901367
+  }
+]
+[Nest] 48412  - 12/31/2025, 6:06:51 PM     LOG [SearchService] Full logs: [
+  {
+    "timestamp": "2025-12-30T12:25:47.210Z",
+    "service": "payments",
+    "performance": {
+      "durationMs": 101
+    },
+    "_id": "6953c4cb758c23bce07d9627",
+    "requestId": "4090cb64-cef7-4042-94f7-c2c9441d10e2",
+    "error": null,
+    "route": "POST /payments",
+    "metadata": null,
+    "user": {
+      "id": "user-6720",
+      "role": "admin"
+    },
+    "_summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS"
+  },
+  {
+    "timestamp": "2025-12-30T12:25:47.413Z",
+    "service": "payments",
+    "performance": {
+      "durationMs": 101
+    },
+    "_id": "6953c4cb758c23bce07d9628",
+    "requestId": "03424002-7e2f-4481-9412-710936c0d7f9",
+    "error": null,
+    "route": "POST /payments",
+    "metadata": null,
+    "user": {
+      "id": "user-3040",
+      "role": "admin"
+    },
+    "_summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS"
+  },
+  {
+    "timestamp": "2025-12-30T12:25:47.414Z",
+    "service": "payments",
+    "performance": {
+      "durationMs": 103
+    },
+    "_id": "6953c4cb758c23bce07d962b",
+    "requestId": "57fa395b-f6f7-449b-8145-c38ac6d59dd6",
+    "error": null,
+    "route": "POST /payments",
+    "metadata": null,
+    "user": {
+      "id": "user-2798",
+      "role": "admin"
+    },
+    "_summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS"
+  },
+  {
+    "timestamp": "2025-12-30T12:25:47.824Z",
+    "service": "payments",
+    "metadata": null,
+    "_id": "6953c4cb758c23bce07d9633",
+    "_summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS",
+    "user": {
+      "id": "user-2011",
+      "role": "admin"
+    },
+    "error": null,
+    "requestId": "eb52865b-0e4c-4c8f-b716-5b2cf9e26317",
+    "performance": {
+      "durationMs": 100
+    },
+    "route": "POST /payments"
+  },
+  {
+    "timestamp": "2025-12-30T12:25:48.027Z",
+    "service": "payments",
+    "metadata": null,
+    "_id": "6953c4cc758c23bce07d9639",
+    "_summary": "Outcome: SUCCESS, Service: payments, Route: POST /payments, Error: NONE, ErrorMessage: NONE, UserRole: admin, LatencyBucket: P_50_200MS",
+    "user": {
+      "id": "user-0050",
+      "role": "admin"
+    },
+    "error": null,
+    "requestId": "81fcd6ba-2e63-4340-ab98-f01ce520ec88",
+    "performance": {
+      "durationMs": 101
+    },
+    "route": "POST /payments"
+  }
+]
+```
+
+쿼리 전처리 이후 유사도 검색에서 error 케이스를 구분하는게 쉽지 않아보임. knowledge 컬렉션의 수정이 필요해 보임 (샘플링 전략도 수정이 필요)
+
+수정/추가 계획
+
+```bash
+
+Step 1: AggregationService 생성
+- aggregateErrorCodesByCount() 구현
+- aggregateErrorsByRoute() 구현
+- aggregateErrorsByService() 구현
+Step 2: SearchService 확장
+- handleStatisticalQuery() 메서드 추가
+- Intent detection 강화
+- Aggregation type 파싱 로직 추가
+Step 3: MongoLogAdapter 확장
+- executeAggregation() 메서드 구현
+- wide_events 컬렉션 직접 접근
+Step 4: Gemini Synthesis 프롬프트 개선
+- 집계 결과를 자연어로 변환하는 프롬프트 추가
+- 표 형식 출력 지원
+
+```
+
+- 스텝 1,2,4 완료 후
+
+```bash
+{
+  "question": "프리미엄 유저가 결제 요청에 실패하는 주요 이유가 뭐야?",
+  "intent": "STATISTICAL",
+  "answer": "프리미엄 유저가 결제 요청에 실패하는 주요 이유는 제공된 로그에 따르면 다음과 같습니다.\n\n1.  **INSUFFICIENT_FUNDS**: 26건의 실패가 이 오류 코드로 기록되었으며, 이는 사용자의 계정에 거래를 완료할 자금이 부족함을 의미합니다.\n2.  **INSUFFICIENT_BALANCE**: 14건의 실패가 이 오류 코드로 기록되었으며, 이는 잔액이 부족함을 나타냅니다.\n3.  **GATEWAY_TIMEOUT**: 13건의 실패가 이 오류 코드로 기록되었으며, 이는 결제 게이트웨이와의 연결 시간 초과를 의미합니다.\n4.  **GATEWAY_REJECTED**: 12건의 실패가 이 오류 코드로 기록되었으며, 이는 외부 결제 게이트웨이가 잘못된 매개변수 또는 은행 정책으로 인해 요청을 거부했음을 의미합니다.\n5.  **CARD_EXPIRED**: 9건의 실패가 이 오류 코드로 기록되었으며, 이는 제공된 결제 수단이 만료되었음을 의미합니다.\n\n또한, \"contextLogs\"에 따르면 프리미엄 유저의 결제 실패가 \"INSUFFICIENT_BALANCE\" (잔액 부족)으로 인해 발생한 사례가 여러 건 확인되었습니다.",
+  "sources": [
+    "26189969-02de-42aa-9a02-da3904e97114",
+    "7d505e7c-e47f-499d-8315-0851f63b6cb4",
+    "8400f32f-4bc3-43c7-b32d-86dced662c80",
+    ...
+  ],
+  "confidence": 1,
+  "sessionId": "test-session"
+}
+
+
+curl -G "http://localhost:3000/search/ask"   --data-urlencode "q=최근 3일 동안 발생한 가장 심각한 결제 오류는 뭐야?"   --data-urlencode "sessionId=test-session" | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   456  100   456    0     0    160      0  0:00:02  0:00:02 --:--:--   160
+{
+  "question": "최근 3일 동안 발생한 가장 심각한 결제 오류는 뭐야?",
+  "intent": "SEMANTIC",
+  "answer": "최근 3일 동안 발생한 가장 심각한 결제 오류는 'GATEWAY_TIMEOUT'이며, 이는 결제 게이트웨이 연결 시간 초과로 인해 발생했습니다.",
+  "sources": [
+    "0ffccee3-bf9d-4736-a710-1ca782760b12",
+    "959e3db6-d5ec-4c81-a9c7-2ad00f24b874",
+    "bfcf0b45-0fc8-4c87-9fb6-fbf1992eeccd"
+  ],
+  "confidence": 1,
+  "sessionId": "test-session"
+}
+
+
+```
+
+- 스텝 3, 5
+
+```markdown
+Phase 구분
+
+## Phase 4 (현재): Backend 내부 최적화
+
+### 인메모리 캐싱 (Node.js Map/Set)
+
+- 단일 프로세스 내에서 동작
+- 외부 의존성 없음
+- 빠른 구현 가능
+
+### Query Reformulation
+
+- LLM 기반 질문 재구성
+- Backend 로직 범위
+
+### Context Compression
+
+- 히스토리 요약 로직
+- Backend 로직 범위
+
+## Phase 5: 인프라스트럭처 개선
+
+### Phase 5 문서에 명시된 내용:
+
+- Redis Caching: "Cache common AI-generated query plans and summary results"
+- Message Queue (MQ): 로깅 파이프라인 비동기화
+- Tail-Based Sampling: 비용 최적화
+
+---
+
+## 구분 기준
+
+### Phase 4에서 구현 (Backend 내부)
+
+- 단일 애플리케이션 인스턴스 내에서 동작
+- 외부 인프라 의존성 없음
+- 핵심 기능 완성을 위해 필요
+
+### Phase 5로 미루기 (인프라 개선)
+
+- 분산 환경 지원 (여러 인스턴스 간 공유)
+- 외부 서비스 의존성 (Redis, MQ)
+- 프로덕션 안정성/확장성 개선
+
+---
+
+## Step 3 구현 전략 (수정)
+
+### Phase 4에서 구현할 것
+
+1. SessionCacheService (인메모리)
+
+- Map<string, SessionData> 사용
+- TTL 기반 만료
+- 단일 인스턴스에서 동작
+
+2. QueryReformulationService
+
+- LLM 기반 질문 재구성
+- Backend 로직
+
+3. ContextCompressionService
+
+- 긴 히스토리 요약
+- Backend 로직
+
+### Phase 5로 미룰 것
+
+1. Redis 기반 세션 캐싱
+
+- 분산 환경 지원
+- 여러 인스턴스 간 세션 공유
+
+2. Redis 기반 Semantic Caching
+
+- 벡터 쿼리 결과 캐싱
+- Phase 5 문서에 명시됨
 ```

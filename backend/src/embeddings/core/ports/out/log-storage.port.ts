@@ -63,4 +63,17 @@ export abstract class LogStoragePort {
    * Retrieves full log documents by their internal IDs.
    */
   abstract getLogsByEventIds(eventIds: any[]): Promise<any[]>;
+
+  /**
+   * Execute aggregation pipeline on a collection.
+   * Used for statistical queries (e.g., error code counts, top N analysis).
+   *
+   * @param pipeline MongoDB aggregation pipeline
+   * @param collectionName Collection name (default: "wide_events")
+   * @returns Aggregation results
+   */
+  abstract executeAggregation(
+    pipeline: any[],
+    collectionName?: string,
+  ): Promise<any[]>;
 }

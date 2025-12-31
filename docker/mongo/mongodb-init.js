@@ -91,9 +91,15 @@ db.createCollection("wide_events_embedded", {
           bsonType: "objectId",
           description: "WideEvent eventId (ObjectID)",
         },
+        requestId: {
+          bsonType: "string",
+          description:
+            "Request ID for grounding - links back to original wide_events",
+        },
         summary: {
           bsonType: "string",
-          description: "Summary of the WideEvent",
+          description:
+            "Dual-layer summary (narrative + canonical) of the WideEvent",
         },
         model: {
           bsonType: "string",
@@ -106,6 +112,14 @@ db.createCollection("wide_events_embedded", {
             bsonType: "number",
             description: "Embedding element",
           },
+        },
+        service: {
+          bsonType: "string",
+          description: "Service name for filtering",
+        },
+        timestamp: {
+          bsonType: "date",
+          description: "Original event timestamp from wide_events",
         },
         createdAt: {
           bsonType: "date",
@@ -135,7 +149,13 @@ db.wide_events_embedded.createSearchIndexes([
         },
         {
           type: "filter",
+          path: "timestamp",
+          description: "Original event timestamp for time-based filtering",
+        },
+        {
+          type: "filter",
           path: "createdAt",
+          description: "Embedding creation timestamp",
         },
         {
           type: "filter",
