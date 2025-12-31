@@ -12,7 +12,7 @@ import { QueryMetadata } from "@embeddings/dtos";
 export class AggregationService {
   private readonly logger = new Logger(AggregationService.name);
 
-  constructor(private readonly logStorage: LogStoragePort) {}
+  constructor(private readonly logStoragePort: LogStoragePort) {}
 
   /**
    * Aggregates error codes by count, returning top N error codes.
@@ -39,7 +39,6 @@ export class AggregationService {
       "error.code": { $exists: true, $ne: null },
     };
 
-    // Add time range filter if provided
     if (metadata.startTime || metadata.endTime) {
       matchStage.timestamp = {};
       if (metadata.startTime) {
@@ -50,17 +49,14 @@ export class AggregationService {
       }
     }
 
-    // Add service filter if provided
     if (metadata.service) {
       matchStage.service = metadata.service;
     }
 
     const pipeline = [
-      // 1. Match documents with errors in the specified time range
       {
         $match: matchStage,
       },
-      // 2. Group by error code
       {
         $group: {
           _id: "$error.code",
@@ -77,15 +73,13 @@ export class AggregationService {
           },
         },
       },
-      // 3. Sort by count descending
+
       {
         $sort: { count: -1 },
       },
-      // 4. Limit to top N
       {
         $limit: topN,
       },
-      // 5. Reshape output
       {
         $project: {
           _id: 0,
@@ -97,7 +91,7 @@ export class AggregationService {
     ];
 
     try {
-      const results = await this.logStorage.executeAggregation(
+      const results = await this.logStoragePort.executeAggregation(
         pipeline,
         "wide_events",
       );
@@ -168,13 +162,13 @@ export class AggregationService {
           _id: 0,
           route: "$_id",
           count: 1,
-          errorCodes: [], // Simplified - can be enhanced later if needed
+          errorCodes: [],
         },
       },
     ];
 
     try {
-      const results = await this.logStorage.executeAggregation(
+      const results = await this.logStoragePort.executeAggregation(
         pipeline,
         "wide_events",
       );
@@ -197,9 +191,7 @@ export class AggregationService {
    * @param metadata Query metadata containing time range and filters
    * @returns Array of services with their error counts
    */
-  async aggregateErrorsByService(
-    metadata: QueryMetadata,
-  ): Promise<
+  async aggregateErrorsByService(metadata: QueryMetadata): Promise<
     Array<{
       service: string;
       count: number;
@@ -238,13 +230,13 @@ export class AggregationService {
           _id: 0,
           service: "$_id",
           count: 1,
-          topErrorCodes: [], // Simplified - can be enhanced later if needed
+          topErrorCodes: [],
         },
       },
     ];
 
     try {
-      const results = await this.logStorage.executeAggregation(
+      const results = await this.logStoragePort.executeAggregation(
         pipeline,
         "wide_events",
       );
@@ -261,4 +253,3 @@ export class AggregationService {
     }
   }
 }
-

@@ -13,24 +13,65 @@ import {
   QueryPreprocessorService,
   SummaryEnrichmentService,
   AggregationService,
+  SessionCacheService,
+  QueryReformulationService,
+  ContextCompressionService,
 } from "@embeddings/service";
 import {
   VoyageAdapter,
   VoyageClient,
   GeminiAdapter,
   GeminiClient,
-  MongoLogAdapter,
-  MongoSearchAdapter,
+  MongoLogStorageAdapter,
+  MongoChatHistoryAdapter,
   MongoEmbeddingClient,
 } from "@embeddings/infrastructure";
 import {
   EmbeddingController,
   SearchController,
 } from "@embeddings/presentation";
+import {
+  PromptTemplateRegistry,
+  QueryMetadataSynthesisPrompt,
+  SemanticSynthesisPrompt,
+  QueryReformulationSynthesisPrompt,
+  HistorySummarizationSynthesisPrompt,
+} from "@embeddings/value-objects/prompts";
 
 @Module({
   controllers: [EmbeddingController, SearchController],
   providers: [
+    // Prompt Template Registry (loads templates from JSON files)
+    PromptTemplateRegistry,
+    // Prompt Template Instances (injected with registry)
+    {
+      provide: QueryMetadataSynthesisPrompt,
+      useFactory: (registry: PromptTemplateRegistry) => {
+        return new QueryMetadataSynthesisPrompt(registry);
+      },
+      inject: [PromptTemplateRegistry],
+    },
+    {
+      provide: SemanticSynthesisPrompt,
+      useFactory: (registry: PromptTemplateRegistry) => {
+        return new SemanticSynthesisPrompt(registry);
+      },
+      inject: [PromptTemplateRegistry],
+    },
+    {
+      provide: QueryReformulationSynthesisPrompt,
+      useFactory: (registry: PromptTemplateRegistry) => {
+        return new QueryReformulationSynthesisPrompt(registry);
+      },
+      inject: [PromptTemplateRegistry],
+    },
+    {
+      provide: HistorySummarizationSynthesisPrompt,
+      useFactory: (registry: PromptTemplateRegistry) => {
+        return new HistorySummarizationSynthesisPrompt(registry);
+      },
+      inject: [PromptTemplateRegistry],
+    },
     // Infrastructure Clients (Initialization only)
     VoyageClient,
     GeminiClient,
@@ -41,6 +82,10 @@ import {
     SummaryEnrichmentService,
     // Aggregation Service
     AggregationService,
+    // Step 3: Conversational RAG Services
+    SessionCacheService,
+    QueryReformulationService,
+    ContextCompressionService,
     // Services (Inbound Ports, Use Cases)
     {
       provide: EmbeddingUseCase,
@@ -65,11 +110,11 @@ import {
     },
     {
       provide: ChatHistoryPort,
-      useClass: MongoSearchAdapter,
+      useClass: MongoChatHistoryAdapter,
     },
     {
       provide: LogStoragePort,
-      useClass: MongoLogAdapter,
+      useClass: MongoLogStorageAdapter,
     },
   ],
 })

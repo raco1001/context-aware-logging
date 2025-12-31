@@ -1,0 +1,16 @@
+export const EDGE_CASE_KEYWORDS: string[] = [
+  "edge case",
+  "edge",
+  "unknown",
+  "특별한",
+  "rare",
+  "unusual",
+  "rare event",
+  "unusual event",
+  "rare case",
+  "unusual case",
+  "rare scenario",
+  "unusual scenario",
+  "rare situation",
+  "unusual situation",
+];

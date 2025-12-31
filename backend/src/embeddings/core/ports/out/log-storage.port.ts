@@ -76,4 +76,9 @@ export abstract class LogStoragePort {
     pipeline: any[],
     collectionName?: string,
   ): Promise<any[]>;
+
+  /**
+   * Grounding: Fetch full log documents by their request IDs.
+   */
+  abstract findLogsByRequestIds(requestIds: string[]): Promise<any[]>;
 }

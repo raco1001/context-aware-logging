@@ -1,6 +1,14 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { QueryMetadata } from "@embeddings/dtos";
-
+import {
+  USER_ROLES_KEYWORDS,
+  OUTCOME_KEYWORDS,
+  LATENCY_KEYWORDS,
+} from "@embeddings/value-objects/filter";
+import {
+  ROUTE_PATTERN_CONSTANTS,
+  SERVICE_MAP_CONSTANTS,
+} from "@embeddings/value-objects/constants";
 /**
  * QueryPreprocessor - Transforms natural language queries into structured format
  * that matches the _summary format used for log embeddings.
@@ -57,30 +65,20 @@ export class QueryPreprocessorService {
       return "FAILED";
     }
 
-    const failureKeywords = [
-      "failed",
-      "failure",
-      "error",
-      "errors",
-      "exception",
-      "timeout",
-      "broken",
-      "down",
-      "issue",
-      "problem",
-    ];
-    if (failureKeywords.some((keyword) => lowerQuery.includes(keyword))) {
+    if (
+      OUTCOME_KEYWORDS.FAILED.some((keyword) => lowerQuery.includes(keyword))
+    ) {
       return "FAILED";
     }
-
-    const successKeywords = ["success", "succeeded", "working", "ok"];
-    if (successKeywords.some((keyword) => lowerQuery.includes(keyword))) {
+    if (
+      OUTCOME_KEYWORDS.SUCCESS.some((keyword) => lowerQuery.includes(keyword))
+    ) {
       return "SUCCESS";
     }
-
-    const warningKeywords = ["slow", "latency", "warning", "degraded"];
-    if (warningKeywords.some((keyword) => lowerQuery.includes(keyword))) {
-      return "WARNING";
+    if (
+      OUTCOME_KEYWORDS.EDGE_CASE.some((keyword) => lowerQuery.includes(keyword))
+    ) {
+      return "EDGE_CASE";
     }
 
     return "ANY";
@@ -91,11 +89,7 @@ export class QueryPreprocessorService {
    */
   private extractUserRole(query: string): string | null {
     const lowerQuery = query.toLowerCase();
-    const roleKeywords = {
-      PREMIUM: ["premium", "paid", "subscription"],
-      ADMIN: ["admin", "administrator"],
-      ANONYMOUS: ["anonymous", "guest"],
-    };
+    const roleKeywords = USER_ROLES_KEYWORDS;
 
     for (const [role, keywords] of Object.entries(roleKeywords)) {
       if (keywords.some((keyword) => lowerQuery.includes(keyword))) {
@@ -111,12 +105,7 @@ export class QueryPreprocessorService {
    */
   private extractLatencyBucket(query: string): string | null {
     const lowerQuery = query.toLowerCase();
-    const latencyKeywords = {
-      P_UNDER_100MS: ["fast", "quick", "<100ms", "under 100"],
-      P_100_500MS: ["100-500", "100 to 500"],
-      P_500_1000MS: ["500-1000", "500 to 1000", "half second"],
-      P_OVER_1000MS: ["slow", ">1000ms", "over 1000", "second", "timeout"],
-    };
+    const latencyKeywords = LATENCY_KEYWORDS;
 
     for (const [bucket, keywords] of Object.entries(latencyKeywords)) {
       if (keywords.some((keyword) => lowerQuery.includes(keyword))) {
@@ -142,15 +131,7 @@ export class QueryPreprocessorService {
     const lowerService = service.toLowerCase().trim();
 
     // Common service name mappings (singular -> plural)
-    const serviceMappings: Record<string, string> = {
-      payment: "payments",
-      embedding: "embeddings",
-      user: "users",
-      order: "orders",
-      product: "products",
-      cart: "carts",
-      checkout: "checkouts",
-    };
+    const serviceMappings = SERVICE_MAP_CONSTANTS;
 
     // Check if we have a mapping
     if (serviceMappings[lowerService]) {
@@ -182,40 +163,7 @@ export class QueryPreprocessorService {
     const lowerQuery = query.toLowerCase();
 
     // Common route patterns and their keywords
-    const routePatterns: Array<{ keywords: string[]; route: string }> = [
-      {
-        keywords: ["checkout", "check-out", "check out"],
-        route: "/payments/checkout",
-      },
-      {
-        keywords: ["payment", "pay", "billing"],
-        route: "/payments",
-      },
-      {
-        keywords: ["embedding", "embed", "vector"],
-        route: "/embeddings",
-      },
-      {
-        keywords: ["search", "query", "ask"],
-        route: "/search",
-      },
-      {
-        keywords: ["user", "profile", "account"],
-        route: "/users",
-      },
-      {
-        keywords: ["order", "purchase"],
-        route: "/orders",
-      },
-      {
-        keywords: ["product", "item", "catalog"],
-        route: "/products",
-      },
-      {
-        keywords: ["cart", "basket"],
-        route: "/carts",
-      },
-    ];
+    const routePatterns = ROUTE_PATTERN_CONSTANTS;
 
     // Find matching route pattern
     for (const pattern of routePatterns) {
@@ -256,8 +204,6 @@ export class QueryPreprocessorService {
 
     const primary = this.preprocessQuery(query, metadata);
     variations.push(primary);
-
-    const lowerQuery = query.toLowerCase();
 
     if (metadata.hasError || metadata.errorCode) {
       const errorFocused = this.preprocessQuery(query, {

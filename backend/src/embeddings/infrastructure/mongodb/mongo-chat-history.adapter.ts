@@ -4,10 +4,9 @@ import { AnalysisResult, AnalysisIntent } from "@embeddings/domain";
 import { MongoEmbeddingClient } from "./mongo.client";
 
 @Injectable()
-export class MongoSearchAdapter extends ChatHistoryPort {
-  private readonly logger = new Logger(MongoSearchAdapter.name);
+export class MongoChatHistoryAdapter extends ChatHistoryPort {
+  private readonly logger = new Logger(MongoChatHistoryAdapter.name);
   private readonly historyCollection = "chat_history";
-  private readonly logsCollection = "wide_events";
 
   constructor(private readonly client: MongoEmbeddingClient) {
     super();
@@ -47,21 +46,6 @@ export class MongoSearchAdapter extends ChatHistoryPort {
         `Failed to find chat history for session ${sessionId}: ${error.message}`,
       );
       return [];
-    }
-  }
-
-  /**
-   * Grounding: Fetch full log documents by their request IDs.
-   */
-  async findLogsByRequestIds(requestIds: string[]): Promise<any[]> {
-    try {
-      const collection = this.client.getCollection(this.logsCollection);
-      return await collection
-        .find({ requestId: { $in: requestIds } })
-        .toArray();
-    } catch (error) {
-      this.logger.error(`Failed to find logs by requestIds: ${error.message}`);
-      throw error;
     }
   }
 }

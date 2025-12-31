@@ -12,7 +12,7 @@ export class EmbeddingService extends EmbeddingUseCase {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly logStorage: LogStoragePort,
+    private readonly logStoragePort: LogStoragePort,
     private readonly embeddingPort: EmbeddingPort,
     private readonly summaryEnrichment: SummaryEnrichmentService,
   ) {
@@ -35,9 +35,9 @@ export class EmbeddingService extends EmbeddingUseCase {
       `Starting High-Watermark embedding process (Source: ${source}, Limit: ${limit}, Chunk Size: ${this.batchChunkSize})`,
     );
 
-    const watermark = await this.logStorage.getWatermark(source);
+    const watermark = await this.logStoragePort.getWatermark(source);
 
-    const logsToEmbed = await this.logStorage.findLogsAfterWatermark(
+    const logsToEmbed = await this.logStoragePort.findLogsAfterWatermark(
       source,
       watermark,
       limit,
@@ -56,35 +56,29 @@ export class EmbeddingService extends EmbeddingUseCase {
       try {
         this.logger.log(`Processing chunk of ${chunk.length} logs...`);
 
-        // Phase 4 Step 2.5: Apply chunking strategy for embedding
-        // Use field-based chunking to enable more granular semantic search
         const chunksToEmbed: Array<{
           log: (typeof chunk)[0];
           chunk: Chunk;
         }> = [];
 
         for (const log of chunk) {
-          // Phase 4: Generate Dual-layer Summary from WideEvent
-          // This responsibility belongs to the embedding module, not logging module
           const dualLayerSummary = log.wideEvent
             ? this.summaryEnrichment.generateDualLayerSummary(log.wideEvent)
-            : log.summary; // Fallback to canonical summary if WideEvent not available
+            : log.summary;
 
-          // Check if chunking is beneficial for this summary
           if (shouldChunk(dualLayerSummary, 200)) {
-            // Use field-based chunking for structured summaries
             const fieldChunks = chunkByFields(dualLayerSummary);
             // For now, we'll embed the full summary but keep chunking logic ready
             // Future: Can implement multi-chunk embedding if needed
             chunksToEmbed.push({
               log,
-              chunk: { text: dualLayerSummary }, // Use Dual-layer Summary
+              chunk: { text: dualLayerSummary },
             });
           } else {
             // Short summary: embed as-is
             chunksToEmbed.push({
               log,
-              chunk: { text: dualLayerSummary }, // Use Dual-layer Summary
+              chunk: { text: dualLayerSummary },
             });
           }
         }
@@ -109,7 +103,7 @@ export class EmbeddingService extends EmbeddingUseCase {
           lastEventTimestamp: lastLog.timestamp,
         };
 
-        await this.logStorage.saveEmbeddingsAndUpdateWatermark(
+        await this.logStoragePort.saveEmbeddingsAndUpdateWatermark(
           source,
           resultsToSave,
           newWatermark,
@@ -143,7 +137,7 @@ export class EmbeddingService extends EmbeddingUseCase {
 
     const { embedding } = await this.embeddingPort.createEmbedding(query);
 
-    return this.logStorage.vectorSearch(embedding, limit);
+    return this.logStoragePort.vectorSearch(embedding, limit);
   }
 
   async embedByRequestId(requestId: string): Promise<void> {

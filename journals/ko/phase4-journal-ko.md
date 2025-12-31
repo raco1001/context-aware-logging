@@ -409,21 +409,24 @@ Phase 구분
 
 ### Phase 4에서 구현할 것
 
-1. SessionCacheService (인메모리)
+1. SessionCacheService (인메모리) [✅]
 
 - Map<string, SessionData> 사용
 - TTL 기반 만료
 - 단일 인스턴스에서 동작
+- **완료**: SearchService에 통합됨
 
-2. QueryReformulationService
+2. QueryReformulationService [✅]
 
 - LLM 기반 질문 재구성
 - Backend 로직
+- **완료**: GeminiAdapter에 reformulateQuery 구현, SearchService에 통합됨
 
-3. ContextCompressionService
+3. ContextCompressionService [✅]
 
 - 긴 히스토리 요약
 - Backend 로직
+- **완료**: SynthesisPort에 summarizeHistory 메서드 추가, GeminiAdapter에 구현, SearchService에 통합됨
 
 ### Phase 5로 미룰 것
 
@@ -437,3 +440,96 @@ Phase 구분
 - 벡터 쿼리 결과 캐싱
 - Phase 5 문서에 명시됨
 ```
+
+---
+
+### 2025-12-31 (후반)
+
+- Step 3 완료 작업
+
+**완료된 작업:**
+
+1. **ContextCompressionService 개선**
+   - `SynthesisPort` 인터페이스에 `summarizeHistory()` 메서드 추가
+   - `GeminiAdapter`에 `summarizeHistory()` 구현
+   - 직접 클라이언트 접근 제거, 인터페이스 기반으로 리팩토링
+   - Fallback 로직을 `GeminiAdapter` 내부로 이동
+
+2. **GeminiAdapter 히스토리 포맷팅 수정**
+   - `synthesize()` 메서드에서 히스토리 포맷팅 버그 수정
+   - `role`/`content` → `question`/`answer`로 변경하여 `AnalysisResult` 구조와 일치시킴
+
+3. **코드 품질 개선**
+   - 모든 린터 오류 해결
+   - 인터페이스 기반 설계로 개선 (의존성 역전 원칙 준수)
+
+**Step 3 상태:**
+
+- ✅ SessionCacheService: 완료 및 통합
+- ✅ QueryReformulationService: 완료 및 통합
+- ✅ ContextCompressionService: 완료 및 통합
+
+**결과**
+
+```bash
+# 첫 번째 질문
+SESSION_ID="test-session-$(date +%s)" && \
+curl -G "http://localhost:3000/search/ask" \
+  --data-urlencode "q=프리미엄 고객이 결제 요청에 실패하는 주요원인이 있다면 뭐야?" \
+  --data-urlencode "sessionId=$SESSION_ID" | jq && \
+echo "\n---\n" && \
+# 두 번째 질문 (같은 세션)
+curl -G "http://localhost:3000/search/ask" \
+  --data-urlencode "q=방금 내가 어떤 질문을 했지?" \
+  --data-urlencode "sessionId=$SESSION_ID" | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  1868  100  1868    0     0    562      0  0:00:03  0:00:03 --:--:--   562
+{
+  "question": "프리미엄 고객이 결제 요청에 실패하는 주요원인이 있다면 뭐야?",
+  "intent": "STATISTICAL",
+  "answer": "프리미엄 고객의 결제 요청 실패에 대한 주요 원인은 다음과 같습니다.\n1. INSUFFICIENT_FUNDS (잔액 부족): 26건의 요청에서 발생했으며, 사용자가 거래를 완료하기에 계정에 자금이 부족함을 나타냅니다.\n2. INSUFFICIENT_BALANCE (잔액 부족): 14건의 요청에서 발생했으며, 단순히 잔액이 부족하다는 메시지를 포함합니다.\n3. GATEWAY_TIMEOUT (게이트웨이 시간 초과): 13건의 요청에서 발생했으며, 결제 게이트웨이와의 연결 시간이 초과되었습니다.\n4. GATEWAY_REJECTED (게이트웨이 거부): 12건의 요청에서 발생했으며, 외부 결제 게이트웨이가 잘못된 매개변수 또는 은행 정책으로 인해 요청을 거부했습니다.\n5. CARD_EXPIRED (카드 만료): 9건의 요청에서 발생했으며, 제공된 결제 수단이 만료되었습니다.\n\n제공된 로그 컨텍스트에 따르면, 특히 \"INSUFFICIENT_BALANCE\" 오류는 프리미엄 고객의 결제 실패에 기여하는 상당한 요인으로 나타납니다.",
+  "sources": [
+    "26189969-02de-42aa-9a02-da3904e97114",
+    "7d505e7c-e47f-499d-8315-0851f63b6cb4",
+    "8400f32f-4bc3-43c7-b32d-86dced662c80",
+    "eedb7e95-4fcc-41b2-adcc-d20823530d64",
+    "e949d94b-23fa-4bc3-bd1b-3ef1eb0c7db7",
+    "4a0b0928-2371-4b1d-873f-7a3b4d8f7802",
+    "84dbc6a6-74f1-4e80-887e-49e1a66a5b6e",
+    "0ffccee3-bf9d-4736-a710-1ca782760b12",
+    "959e3db6-d5ec-4c81-a9c7-2ad00f24b874",
+    "fdfaa553-d1ba-4252-b31a-25c817b88121",
+    "7fe1de2b-69dd-4550-b05b-7bfe658dc012",
+    "1f507dfd-dd37-4387-ba2f-61b5b464b1aa",
+    "adfd4ef1-91a5-42dd-bf73-12dc839ee420",
+    "19cca39f-eec5-42ad-a945-9995f371ddc9",
+    "28d8a06d-8d2d-4a65-822a-85c5bb1badb7"
+  ],
+  "confidence": 0.9,
+  "sessionId": "test-session-1767181108"
+}
+\n---\n
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   471  100   471    0     0    213      0  0:00:02  0:00:02 --:--:--   213
+{
+  "question": "방금 내가 어떤 질문을 했지?",
+  "intent": "SEMANTIC",
+  "answer": "방금 \"프리미엄 고객이 결제 요청에 실패하는 주요원인이 있다면 뭐야?\"라고 질문하셨습니다.",
+  "sources": [
+    "08e66010-59d9-45e4-9e1c-fa403fbb63b7",
+    "7f6a9cdf-09c9-4a38-aa8a-8d1078c00140",
+    "7a8398a8-4986-4998-bf72-3fb58cf2d472",
+    "01a8932a-b6b3-4362-af04-97588a185662",
+    "16d575ff-8f22-40d8-90b8-b0c45de0c0d1"
+  ],
+  "confidence": 1,
+  "sessionId": "test-session-1767181108"
+}
+```
+
+**다음 단계:**
+
+- Step 3 기능 테스트 및 검증
+- Step 4 (Metric Engine & Templates) 또는 Step 5 (Reliability & Performance Hardening) 진행

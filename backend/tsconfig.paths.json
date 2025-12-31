@@ -15,6 +15,15 @@
       "@embeddings": ["src/embeddings/embeddings.module"],
       "@embeddings/domain": ["src/embeddings/core/domain/index"],
       "@embeddings/value-objects": ["src/embeddings/core/value-objects/index"],
+      "@embeddings/value-objects/prompts": [
+        "src/embeddings/core/value-objects/prompts/index"
+      ],
+      "@embeddings/value-objects/filter": [
+        "src/embeddings/core/value-objects/filter/index"
+      ],
+      "@embeddings/value-objects/constants": [
+        "src/embeddings/core/value-objects/constants/index"
+      ],
       "@embeddings/dtos": ["src/embeddings/core/dtos/index"],
       "@embeddings/in-ports": ["src/embeddings/core/ports/in/index"],
       "@embeddings/out-ports": ["src/embeddings/core/ports/out/index"],

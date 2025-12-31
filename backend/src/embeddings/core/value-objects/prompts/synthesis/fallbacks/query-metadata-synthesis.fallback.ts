@@ -1,4 +1,11 @@
-export const INSTRUCTIONS = `
+export const QUERY_METADATA_SYNTHESIS_FALLBACK = `
+Extract query metadata for log searching. 
+Current Time: {{currentTime}}
+
+[Query]
+{{query}}
+
+[Instructions]
 - Return a JSON object with the following fields:
   - startTime: ISO string (if mentioned, e.g., "last 1 hour", "yesterday")
   - endTime: ISO string
@@ -15,4 +22,5 @@ export const INSTRUCTIONS = `
   * "payment errors" -> hasError: true, service: "payments"
   * "checkout requests" -> route: "/payments/checkout"
   * "GATEWAY_TIMEOUT errors" -> hasError: true, errorCode: "GATEWAY_TIMEOUT"
+
 `;

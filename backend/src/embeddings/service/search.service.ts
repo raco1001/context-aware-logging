@@ -4,16 +4,19 @@ import {
   EmbeddingPort,
   RerankPort,
   SynthesisPort,
-  ChatHistoryPort,
   LogStoragePort,
 } from "@embeddings/out-ports";
 import { AnalysisResult, AnalysisIntent } from "@embeddings/domain";
 import {
-  SEMANTIC_KEYWORDS,
   STATISTIC_KEYWORDS,
-} from "@embeddings/value-objects";
+  SEMANTIC_KEYWORDS,
+  AGGREGATION_KEYWORDS,
+} from "@embeddings/value-objects/filter";
 import { QueryPreprocessorService } from "./query-preprocessor.service";
 import { AggregationService } from "./aggregation.service";
+import { SessionCacheService } from "./session-cache.service";
+import { QueryReformulationService } from "./query-reformulation.service";
+import { ContextCompressionService } from "./context-compression.service";
 
 @Injectable()
 export class SearchService extends SearchUseCase {
@@ -23,10 +26,12 @@ export class SearchService extends SearchUseCase {
     private readonly embeddingPort: EmbeddingPort,
     private readonly rerankPort: RerankPort,
     private readonly synthesisPort: SynthesisPort,
-    private readonly chatHistoryPort: ChatHistoryPort,
     private readonly logStoragePort: LogStoragePort,
     private readonly queryPreprocessor: QueryPreprocessorService,
-    private readonly aggregationService: AggregationService,
+    private readonly aggregation: AggregationService,
+    private readonly sessionCache: SessionCacheService,
+    private readonly queryReformulation: QueryReformulationService,
+    private readonly contextCompression: ContextCompressionService,
   ) {
     super();
   }
@@ -71,8 +76,26 @@ export class SearchService extends SearchUseCase {
   ): Promise<AnalysisResult> {
     const intent = AnalysisIntent.SEMANTIC;
 
-    const structuredQuery = this.queryPreprocessor.preprocessQuery(
+    let history: AnalysisResult[] = [];
+    if (sessionId) {
+      history = await this.sessionCache.getHistory(sessionId);
+      this.logger.debug(
+        `Retrieved ${history.length} history turns for session ${sessionId}`,
+      );
+    }
+
+    const reformulatedQuery = await this.queryReformulation.reformulateQuery(
       query,
+      history,
+    );
+
+    const compressedHistory =
+      history.length > 10
+        ? await this.contextCompression.compressHistory(history)
+        : history;
+
+    const structuredQuery = this.queryPreprocessor.preprocessQuery(
+      reformulatedQuery,
       metadata,
     );
     this.logger.log(
@@ -158,18 +181,14 @@ export class SearchService extends SearchUseCase {
 
     const requestIds = fullLogs.map((log) => log.requestId).filter(Boolean);
 
-    const history = sessionId
-      ? await this.chatHistoryPort.findBySessionId(sessionId)
-      : [];
-
     const { answer, confidence } = await this.synthesisPort.synthesize(
-      query,
+      reformulatedQuery,
       fullLogs,
-      history,
+      compressedHistory,
     );
 
     const result: AnalysisResult = {
-      question: query,
+      question: query, // Store original query in result
       intent,
       answer,
       sources: requestIds,
@@ -178,7 +197,7 @@ export class SearchService extends SearchUseCase {
     };
 
     if (sessionId) {
-      await this.chatHistoryPort.save(result);
+      await this.sessionCache.updateSession(sessionId, result);
     }
 
     return result;
@@ -196,41 +215,56 @@ export class SearchService extends SearchUseCase {
     this.logger.log(`Handling statistical query: "${query}"`);
 
     try {
-      // Parse aggregation type from query
-      const aggregationType = this.parseAggregationType(query);
+      let history: AnalysisResult[] = [];
+      if (sessionId) {
+        history = await this.sessionCache.getHistory(sessionId);
+        this.logger.debug(
+          `Retrieved ${history.length} history turns for session ${sessionId}`,
+        );
+      }
+
+      const reformulatedQuery = await this.queryReformulation.reformulateQuery(
+        query,
+        history,
+      );
+
+      const compressedHistory =
+        history.length > 10
+          ? await this.contextCompression.compressHistory(history)
+          : history;
+
+      const aggregationType = this.parseAggregationType(reformulatedQuery);
       this.logger.log(`Detected aggregation type: ${aggregationType}`);
 
       let aggregationResults: any;
       let contextLogs: any[] = [];
 
-      // Execute appropriate aggregation
       if (aggregationType === "error_code_top_n") {
         const topN = this.extractTopN(query) || 5;
-        aggregationResults =
-          await this.aggregationService.aggregateErrorCodesByCount(
-            metadata,
-            topN,
-          );
+        aggregationResults = await this.aggregation.aggregateErrorCodesByCount(
+          metadata,
+          topN,
+        );
       } else if (aggregationType === "error_by_route") {
         const topN = this.extractTopN(query) || 5;
-        aggregationResults =
-          await this.aggregationService.aggregateErrorsByRoute(metadata, topN);
+        aggregationResults = await this.aggregation.aggregateErrorsByRoute(
+          metadata,
+          topN,
+        );
       } else if (aggregationType === "error_by_service") {
         aggregationResults =
-          await this.aggregationService.aggregateErrorsByService(metadata);
+          await this.aggregation.aggregateErrorsByService(metadata);
       } else {
-        // Default to error code aggregation
         const topN = this.extractTopN(query) || 5;
-        aggregationResults =
-          await this.aggregationService.aggregateErrorCodesByCount(
-            metadata,
-            topN,
-          );
+        aggregationResults = await this.aggregation.aggregateErrorCodesByCount(
+          metadata,
+          topN,
+        );
       }
 
-      // Optionally get context logs for better synthesis
       if (aggregationResults && aggregationResults.length > 0) {
-        const { embedding } = await this.embeddingPort.createEmbedding(query);
+        const { embedding } =
+          await this.embeddingPort.createEmbedding(reformulatedQuery);
         contextLogs = await this.logStoragePort.vectorSearch(
           embedding,
           5,
@@ -238,23 +272,17 @@ export class SearchService extends SearchUseCase {
         );
       }
 
-      // Prepare context for synthesis
       const synthesisContext = {
         aggregationResults,
         contextLogs: contextLogs.slice(0, 5),
       };
 
-      const history = sessionId
-        ? await this.chatHistoryPort.findBySessionId(sessionId)
-        : [];
-
       const { answer, confidence } = await this.synthesisPort.synthesize(
-        query,
+        reformulatedQuery,
         [synthesisContext],
-        history,
+        compressedHistory,
       );
 
-      // Extract source requestIds from aggregation results
       const requestIds = aggregationResults
         ? aggregationResults
             .flatMap((result: any) =>
@@ -275,7 +303,7 @@ export class SearchService extends SearchUseCase {
       };
 
       if (sessionId) {
-        await this.chatHistoryPort.save(result);
+        await this.sessionCache.updateSession(sessionId, result);
       }
 
       return result;
@@ -289,7 +317,7 @@ export class SearchService extends SearchUseCase {
   }
 
   async getChatHistory(sessionId: string): Promise<AnalysisResult[]> {
-    return this.chatHistoryPort.findBySessionId(sessionId);
+    return this.sessionCache.getHistory(sessionId);
   }
 
   private classifyIntent(query: string): AnalysisIntent {
@@ -297,24 +325,8 @@ export class SearchService extends SearchUseCase {
     const statisticalKeywords = STATISTIC_KEYWORDS;
     const semanticKeywords = SEMANTIC_KEYWORDS;
 
-    // Enhanced aggregation keywords
-    const aggregationKeywords = [
-      "상위",
-      "top",
-      "주요",
-      "원인",
-      "frequent",
-      "most",
-      "common",
-      "group",
-      "그룹",
-      "집계",
-      "aggregate",
-      "통계",
-      "statistics",
-    ];
+    const aggregationKeywords = AGGREGATION_KEYWORDS;
 
-    // Check for aggregation patterns
     if (
       aggregationKeywords.some((k) => lowerQuery.includes(k)) ||
       statisticalKeywords.some((k) => lowerQuery.includes(k))
@@ -334,7 +346,6 @@ export class SearchService extends SearchUseCase {
   private parseAggregationType(query: string): string {
     const lowerQuery = query.toLowerCase();
 
-    // Check for error code aggregation patterns
     if (
       lowerQuery.includes("원인") ||
       lowerQuery.includes("error code") ||
@@ -344,7 +355,6 @@ export class SearchService extends SearchUseCase {
       return "error_code_top_n";
     }
 
-    // Check for route aggregation patterns
     if (
       lowerQuery.includes("route") ||
       lowerQuery.includes("경로") ||
@@ -353,7 +363,6 @@ export class SearchService extends SearchUseCase {
       return "error_by_route";
     }
 
-    // Check for service aggregation patterns
     if (
       lowerQuery.includes("service") ||
       lowerQuery.includes("서비스") ||
@@ -362,7 +371,6 @@ export class SearchService extends SearchUseCase {
       return "error_by_service";
     }
 
-    // Default to error code aggregation
     return "error_code_top_n";
   }
 
@@ -373,7 +381,6 @@ export class SearchService extends SearchUseCase {
   private extractTopN(query: string): number | null {
     const lowerQuery = query.toLowerCase();
 
-    // Patterns: "상위 5개", "top 5", "5개", "5 개"
     const patterns = [
       /상위\s*(\d+)/,
       /top\s*(\d+)/,

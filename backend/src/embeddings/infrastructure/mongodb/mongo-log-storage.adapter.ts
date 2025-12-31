@@ -7,9 +7,9 @@ import { QueryMetadata } from "@embeddings/dtos";
 import { WideEvent } from "@logging/domain";
 
 @Injectable()
-export class MongoLogAdapter extends LogStoragePort {
-  private readonly logger = new Logger(MongoLogAdapter.name);
-  private readonly collectionName = "wide_events";
+export class MongoLogStorageAdapter extends LogStoragePort {
+  private readonly logger = new Logger(MongoLogStorageAdapter.name);
+  private readonly logsCollection = "wide_events";
   private readonly progressCollection = "embedding_progress";
   private readonly embeddedCollection = "wide_events_embedded";
 
@@ -68,9 +68,10 @@ export class MongoLogAdapter extends LogStoragePort {
         // Construct WideEvent from MongoDB document for Dual-layer Summary generation
         const wideEvent = new WideEvent({
           requestId: doc.requestId,
-          timestamp: doc.timestamp instanceof Date
-            ? doc.timestamp.toISOString()
-            : doc.timestamp,
+          timestamp:
+            doc.timestamp instanceof Date
+              ? doc.timestamp.toISOString()
+              : doc.timestamp,
           service: doc.service,
           route: doc.route,
           user: doc.user,
@@ -81,7 +82,9 @@ export class MongoLogAdapter extends LogStoragePort {
         return new LogEmbeddingEntity(
           doc._id,
           doc.requestId,
-          doc.timestamp instanceof Date ? doc.timestamp : new Date(doc.timestamp),
+          doc.timestamp instanceof Date
+            ? doc.timestamp
+            : new Date(doc.timestamp),
           doc._summary,
           EmbeddingStatus.PENDING,
           doc.service,
@@ -283,7 +286,7 @@ export class MongoLogAdapter extends LogStoragePort {
 
   async getLogsByEventIds(eventIds: any[]): Promise<any[]> {
     try {
-      const collection = this.client.getCollection(this.collectionName);
+      const collection = this.client.getCollection(this.logsCollection);
       return await collection.find({ _id: { $in: eventIds } }).toArray();
     } catch (error) {
       this.logger.error(`Failed to get logs by event IDs: ${error.message}`);
@@ -310,6 +313,21 @@ export class MongoLogAdapter extends LogStoragePort {
         `Aggregation failed on ${collectionName}: ${error.message}`,
         error.stack,
       );
+      throw error;
+    }
+  }
+
+  /**
+   * Grounding: Fetch full log documents by their request IDs.
+   */
+  async findLogsByRequestIds(requestIds: string[]): Promise<any[]> {
+    try {
+      const collection = this.client.getCollection(this.logsCollection);
+      return await collection
+        .find({ requestId: { $in: requestIds } })
+        .toArray();
+    } catch (error) {
+      this.logger.error(`Failed to find logs by requestIds: ${error.message}`);
       throw error;
     }
   }
