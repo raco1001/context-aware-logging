@@ -49,8 +49,11 @@ export class QueryPreprocessorService {
     const userRole = this.extractUserRole(query) || "ANY";
     const latencyBucket = this.extractLatencyBucket(query) || "ANY";
 
-    const structuredQuery = `Outcome: ${outcome}, Service: ${service}, Route: ${route}, Error: ${errorCode}, ErrorMessage: ${errorMessage}, UserRole: ${userRole}, LatencyBucket: ${latencyBucket}`;
-
+    const structuredQuery = query
+      .trim()
+      .concat(
+        `\n\nOutcome: ${outcome}, Service: ${service}, Route: ${route}, Error: ${errorCode}, ErrorMessage: ${errorMessage}, UserRole: ${userRole}, LatencyBucket: ${latencyBucket}`,
+      );
     this.logger.debug(`Structured query: "${structuredQuery}"`);
     return structuredQuery;
   }

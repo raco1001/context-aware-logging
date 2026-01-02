@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ChatHistoryPort } from "@embeddings/out-ports";
-import { AnalysisResult, AnalysisIntent } from "@embeddings/domain";
+import { AnalysisResult } from "@embeddings/dtos";
+import { AnalysisIntent } from "@embeddings/value-objects/filter";
 import { MongoEmbeddingClient } from "./mongo.client";
 
 @Injectable()

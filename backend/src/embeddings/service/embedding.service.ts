@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { EmbeddingUseCase } from "@embeddings/in-ports";
 import { EmbeddingPort, LogStoragePort } from "@embeddings/out-ports";
 import { chunkByFields, shouldChunk, Chunk } from "../core/utils/chunking.util";
-import { SummaryEnrichmentService } from "./summary-enrichment.service";
+import { SummaryEnrichmentService } from "./sub-services/summary-enrichment.service";
 
 @Injectable()
 export class EmbeddingService extends EmbeddingUseCase {

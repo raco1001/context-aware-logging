@@ -196,7 +196,7 @@ private normalizeService(service: string): string {
 
 #### 4. 쿼리 변형 전략
 
-- `createQueryVariations()` 메서드 활용
+- `createQueryVariations() 메`서드 활용
 - 여러 쿼리 변형을 생성하여 검색 정확도 향상
 
 ---

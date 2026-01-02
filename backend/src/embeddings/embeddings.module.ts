@@ -7,9 +7,8 @@ import {
   ChatHistoryPort,
   LogStoragePort,
 } from "@embeddings/out-ports";
+import { EmbeddingService, SearchService } from "@embeddings/service";
 import {
-  EmbeddingService,
-  SearchService,
   QueryPreprocessorService,
   SummaryEnrichmentService,
   AggregationService,
@@ -17,7 +16,7 @@ import {
   QueryReformulationService,
   ContextCompressionService,
   SemanticCacheService,
-} from "@embeddings/service";
+} from "@embeddings/service/sub-services";
 import {
   VoyageAdapter,
   VoyageClient,

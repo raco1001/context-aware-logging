@@ -1,9 +1,4 @@
-export enum AnalysisIntent {
-  STATISTICAL = 'STATISTICAL',
-  SEMANTIC = 'SEMANTIC',
-  UNKNOWN = 'UNKNOWN',
-}
-
+import { AnalysisIntent } from "@embeddings/value-objects/filter";
 export interface AnalysisResult {
   sessionId?: string;
   question: string;

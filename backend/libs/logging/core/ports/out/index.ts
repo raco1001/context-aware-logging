@@ -1,1 +1,2 @@
-export * from './logger.port';
+export * from "./logger.port";
+export * from "./mq-producer.port";

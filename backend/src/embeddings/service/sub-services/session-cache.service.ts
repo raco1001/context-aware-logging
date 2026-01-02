@@ -1,15 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { ChatHistoryPort } from "@embeddings/out-ports";
 import { AnalysisResult } from "@embeddings/domain";
-
+import { SessionCacheDto } from "@embeddings/dtos";
 /**
  * Session data stored in memory cache.
  */
-interface CachedSession {
-  history: AnalysisResult[];
-  lastAccessed: Date;
-  ttl: number; // Time-to-live in milliseconds
-}
 
 /**
  * SessionCacheService - Manages active session history in memory with TTL.
@@ -23,7 +18,7 @@ interface CachedSession {
 @Injectable()
 export class SessionCacheService implements OnModuleDestroy {
   private readonly logger = new Logger(SessionCacheService.name);
-  private readonly activeSessions = new Map<string, CachedSession>();
+  private readonly activeSessions = new Map<string, SessionCacheDto>();
   private readonly defaultTtl = 30 * 60 * 1000; // 30 minutes
   private cleanupInterval: NodeJS.Timeout | null = null;
 
@@ -116,7 +111,7 @@ export class SessionCacheService implements OnModuleDestroy {
   /**
    * Checks if a cached session has expired.
    */
-  private isExpired(cached: CachedSession): boolean {
+  private isExpired(cached: SessionCacheDto): boolean {
     const now = new Date();
     const elapsed = now.getTime() - cached.lastAccessed.getTime();
     return elapsed > cached.ttl;

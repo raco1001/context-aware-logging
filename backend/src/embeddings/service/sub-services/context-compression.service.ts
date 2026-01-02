@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { SynthesisPort } from "@embeddings/out-ports";
-import { AnalysisResult, AnalysisIntent } from "@embeddings/domain";
+import { AnalysisResult } from "@embeddings/dtos";
+import { AnalysisIntent } from "@embeddings/value-objects/filter";
 
 /**
  * ContextCompressionService - Compresses long chat history to manage context window.

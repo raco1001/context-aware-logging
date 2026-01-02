@@ -63,6 +63,14 @@ export class QueryReformulationService {
     const referencePatterns = [
       /\b(it|that|this|those|these|the error|the issue|the problem)\b/i,
       /(그|그것|그 에러|그 문제|그 이슈|그것의|그의)/,
+
+      /(방금|지금|최근|이전|지난|어제|오늘|just now|recently|previous|last)/,
+
+      /(내가|제가|나|저|I|me|my|mine)/,
+
+      /(질문|questioned|questioning)/,
+
+      /(그것|이것|저것|that|this|it)/,
     ];
 
     return referencePatterns.some((pattern) => pattern.test(lowerQuery));

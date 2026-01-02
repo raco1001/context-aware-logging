@@ -1,0 +1,16 @@
+export const CONVERSATIONAL_KEYWORDS: string[] = [
+  "방금",
+  "이전",
+  "질문",
+  "대화",
+  "했지",
+  "했었지",
+  "물어봤지",
+  "뭐였지",
+  "previous",
+  "last question",
+  "conversation",
+  "just asked",
+  "in this session",
+  "session",
+];

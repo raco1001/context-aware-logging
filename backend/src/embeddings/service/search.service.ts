@@ -6,18 +6,23 @@ import {
   SynthesisPort,
   LogStoragePort,
 } from "@embeddings/out-ports";
-import { AnalysisResult, AnalysisIntent } from "@embeddings/domain";
+import { AnalysisResult } from "@embeddings/dtos";
+import { AnalysisIntent } from "@embeddings/value-objects/filter";
+import { QueryMetadata } from "@embeddings/dtos";
 import {
   STATISTIC_KEYWORDS,
   SEMANTIC_KEYWORDS,
   AGGREGATION_KEYWORDS,
+  CONVERSATIONAL_KEYWORDS,
 } from "@embeddings/value-objects/filter";
-import { QueryPreprocessorService } from "./query-preprocessor.service";
-import { AggregationService } from "./aggregation.service";
-import { SessionCacheService } from "./session-cache.service";
-import { QueryReformulationService } from "./query-reformulation.service";
-import { ContextCompressionService } from "./context-compression.service";
-import { SemanticCacheService } from "./semantic-cache.service";
+import {
+  QueryPreprocessorService,
+  AggregationService,
+  SessionCacheService,
+  QueryReformulationService,
+  ContextCompressionService,
+  SemanticCacheService,
+} from "@embeddings/service/sub-services";
 
 @Injectable()
 export class SearchService extends SearchUseCase {
@@ -50,18 +55,72 @@ export class SearchService extends SearchUseCase {
     );
 
     try {
-      const metadata = await this.synthesisPort.extractMetadata(query);
+      let history: AnalysisResult[] = [];
+      if (sessionId) {
+        history = await this.sessionCache.getHistory(sessionId);
+        this.logger.debug(
+          `Retrieved ${history.length} history turns for session ${sessionId}`,
+        );
+      }
       const intent = this.classifyIntent(query);
-      this.logger.log(`Extracted metadata: ${JSON.stringify(metadata)}`);
       this.logger.log(`Detected intent: ${intent}`);
+      if (intent === AnalysisIntent.CONVERSATIONAL) {
+        this.logger.log(`Handling conversational query: "${query}"`);
+        const { answer, confidence } = await this.synthesisPort.synthesize(
+          query,
+          [],
+          history,
+        );
 
-      // Route to statistical or semantic handler
-      if (intent === AnalysisIntent.STATISTICAL) {
-        return await this.handleStatisticalQuery(query, metadata, sessionId);
+        const result: AnalysisResult = {
+          question: query,
+          intent,
+          answer,
+          sources: [],
+          confidence,
+          sessionId,
+        };
+
+        if (sessionId) {
+          await this.sessionCache.updateSession(sessionId, result);
+        }
+        return result;
       }
 
-      // Default to semantic query handling
-      return await this.handleSemanticQuery(query, metadata, sessionId);
+      const reformulatedQuery = await this.queryReformulation.reformulateQuery(
+        query,
+        history,
+      );
+
+      const metadata =
+        await this.synthesisPort.extractMetadata(reformulatedQuery);
+
+      this.logger.log(
+        `Extracted metadata from reformulated query: ${JSON.stringify(metadata)}`,
+      );
+
+      const compressedHistory =
+        history.length > 10
+          ? await this.contextCompression.compressHistory(history)
+          : history;
+
+      if (intent === AnalysisIntent.STATISTICAL) {
+        return await this.handleStatisticalQuery(
+          reformulatedQuery,
+          metadata,
+          compressedHistory,
+          sessionId,
+          query,
+        );
+      }
+
+      return await this.handleSemanticQuery(
+        reformulatedQuery,
+        metadata,
+        compressedHistory,
+        sessionId,
+        query,
+      );
     } catch (error) {
       this.logger.error(`RAG process failed: ${error.message}`, error.stack);
       throw error;
@@ -72,34 +131,20 @@ export class SearchService extends SearchUseCase {
    * Handles semantic queries using vector search + rerank + synthesis.
    */
   private async handleSemanticQuery(
-    query: string,
-    metadata: any,
+    reformulatedQuery: string,
+    metadata: QueryMetadata,
+    history: AnalysisResult[],
     sessionId?: string,
+    originalQuery?: string,
   ): Promise<AnalysisResult> {
     const intent = AnalysisIntent.SEMANTIC;
-
-    let history: AnalysisResult[] = [];
-    if (sessionId) {
-      history = await this.sessionCache.getHistory(sessionId);
-      this.logger.debug(
-        `Retrieved ${history.length} history turns for session ${sessionId}`,
-      );
-    }
-
-    const reformulatedQuery = await this.queryReformulation.reformulateQuery(
-      query,
-      history,
-    );
-
-    const compressedHistory =
-      history.length > 10
-        ? await this.contextCompression.compressHistory(history)
-        : history;
+    const query = originalQuery || reformulatedQuery;
 
     const structuredQuery = this.queryPreprocessor.preprocessQuery(
       reformulatedQuery,
       metadata,
     );
+
     this.logger.log(
       `\n\n 
         Original query: "${query}" \n\n
@@ -113,7 +158,6 @@ export class SearchService extends SearchUseCase {
       `Performing vector search with embedding (dimension: ${embedding.length}), metadata: ${JSON.stringify(metadata)}`,
     );
 
-    // Check semantic cache first
     let vectorResults = this.semanticCache.getCachedResults(
       embedding,
       metadata,
@@ -124,7 +168,6 @@ export class SearchService extends SearchUseCase {
         `Semantic cache hit! Using cached vector results (${vectorResults.length} results)`,
       );
     } else {
-      // Cache miss - perform vector search
       this.logger.log("Semantic cache miss, performing vector search");
       vectorResults = await this.logStoragePort.vectorSearch(
         embedding,
@@ -132,7 +175,6 @@ export class SearchService extends SearchUseCase {
         metadata,
       );
 
-      // Cache the results for future similar queries
       if (vectorResults && vectorResults.length > 0) {
         this.semanticCache.setCachedResults(embedding, metadata, vectorResults);
       }
@@ -205,10 +247,9 @@ export class SearchService extends SearchUseCase {
     const { answer, confidence } = await this.synthesisPort.synthesize(
       reformulatedQuery,
       fullLogs,
-      compressedHistory,
+      history,
     );
 
-    // Grounding Verification: Fact-check the answer against grounding context
     let finalAnswer = answer;
     let finalConfidence = confidence;
     try {
@@ -222,7 +263,6 @@ export class SearchService extends SearchUseCase {
         `Grounding verification: ${verification.status}, action: ${verification.action}`,
       );
 
-      // Apply verification results
       if (verification.action === "REJECT_ANSWER") {
         finalAnswer = "Not enough evidence to provide a reliable answer.";
         finalConfidence = 0;
@@ -230,7 +270,6 @@ export class SearchService extends SearchUseCase {
           `Answer rejected due to insufficient grounding. Unverified claims: ${verification.unverifiedClaims.join(", ")}`,
         );
       } else if (verification.action === "ADJUST_CONFIDENCE") {
-        // Adjust confidence based on verification result
         finalConfidence = Math.min(
           confidence,
           confidence * verification.confidenceAdjustment,
@@ -242,12 +281,10 @@ export class SearchService extends SearchUseCase {
           `Confidence adjusted from ${confidence} to ${finalConfidence} based on verification`,
         );
       }
-      // If action is "KEEP_ANSWER", use original answer and confidence
     } catch (error) {
       this.logger.error(
         `Grounding verification failed, using original answer: ${error.message}`,
       );
-      // On verification error, use original answer but log the issue
     }
 
     const result: AnalysisResult = {
@@ -270,32 +307,17 @@ export class SearchService extends SearchUseCase {
    * Handles statistical/aggregation queries using MongoDB aggregation pipelines.
    */
   private async handleStatisticalQuery(
-    query: string,
-    metadata: any,
+    reformulatedQuery: string,
+    metadata: QueryMetadata,
+    history: AnalysisResult[],
     sessionId?: string,
+    originalQuery?: string,
   ): Promise<AnalysisResult> {
     const intent = AnalysisIntent.STATISTICAL;
-    this.logger.log(`Handling statistical query: "${query}"`);
+    const query = originalQuery || reformulatedQuery;
+    this.logger.log(`Handling statistical query: "${reformulatedQuery}"`);
 
     try {
-      let history: AnalysisResult[] = [];
-      if (sessionId) {
-        history = await this.sessionCache.getHistory(sessionId);
-        this.logger.debug(
-          `Retrieved ${history.length} history turns for session ${sessionId}`,
-        );
-      }
-
-      const reformulatedQuery = await this.queryReformulation.reformulateQuery(
-        query,
-        history,
-      );
-
-      const compressedHistory =
-        history.length > 10
-          ? await this.contextCompression.compressHistory(history)
-          : history;
-
       const { templateId, params } =
         await this.synthesisPort.analyzeStatisticalQuery(
           reformulatedQuery,
@@ -316,7 +338,6 @@ export class SearchService extends SearchUseCase {
           await this.embeddingPort.createEmbedding(reformulatedQuery);
         const searchMetadata = params.metadata || metadata;
 
-        // Check semantic cache first
         contextLogs = this.semanticCache.getCachedResults(
           embedding,
           searchMetadata,
@@ -326,10 +347,8 @@ export class SearchService extends SearchUseCase {
           this.logger.log(
             `Semantic cache hit for statistical query context logs (${contextLogs.length} results)`,
           );
-          // Limit to 5 as requested
           contextLogs = contextLogs.slice(0, 5);
         } else {
-          // Cache miss - perform vector search
           this.logger.log(
             "Semantic cache miss for statistical query, performing vector search",
           );
@@ -339,7 +358,6 @@ export class SearchService extends SearchUseCase {
             searchMetadata,
           );
 
-          // Cache the results for future similar queries
           if (contextLogs && contextLogs.length > 0) {
             this.semanticCache.setCachedResults(
               embedding,
@@ -358,14 +376,12 @@ export class SearchService extends SearchUseCase {
       const { answer, confidence } = await this.synthesisPort.synthesize(
         reformulatedQuery,
         [synthesisContext],
-        compressedHistory,
+        history,
       );
 
-      // Grounding Verification: Fact-check the answer against grounding context
       let finalAnswer = answer;
       let finalConfidence = confidence;
       try {
-        // Prepare grounding context for verification (aggregation results + context logs)
         const verificationContext = [
           ...(aggregationResults || []),
           ...(contextLogs.slice(0, 5) || []),
@@ -381,7 +397,6 @@ export class SearchService extends SearchUseCase {
           `Grounding verification: ${verification.status}, action: ${verification.action}`,
         );
 
-        // Apply verification results
         if (verification.action === "REJECT_ANSWER") {
           finalAnswer = "Not enough evidence to provide a reliable answer.";
           finalConfidence = 0;
@@ -389,7 +404,6 @@ export class SearchService extends SearchUseCase {
             `Answer rejected due to insufficient grounding. Unverified claims: ${verification.unverifiedClaims.join(", ")}`,
           );
         } else if (verification.action === "ADJUST_CONFIDENCE") {
-          // Adjust confidence based on verification result
           finalConfidence = Math.min(
             confidence,
             confidence * verification.confidenceAdjustment,
@@ -401,12 +415,10 @@ export class SearchService extends SearchUseCase {
             `Confidence adjusted from ${confidence} to ${finalConfidence} based on verification`,
           );
         }
-        // If action is "KEEP_ANSWER", use original answer and confidence
       } catch (error) {
         this.logger.error(
           `Grounding verification failed, using original answer: ${error.message}`,
         );
-        // On verification error, use original answer but log the issue
       }
 
       const requestIds = aggregationResults
@@ -448,6 +460,13 @@ export class SearchService extends SearchUseCase {
 
   private classifyIntent(query: string): AnalysisIntent {
     const lowerQuery = query.toLowerCase();
+
+    const conversationalKeywords = [...CONVERSATIONAL_KEYWORDS];
+
+    if (conversationalKeywords.some((k) => lowerQuery.includes(k))) {
+      return AnalysisIntent.CONVERSATIONAL;
+    }
+
     const statisticalKeywords = STATISTIC_KEYWORDS;
     const semanticKeywords = SEMANTIC_KEYWORDS;
 
