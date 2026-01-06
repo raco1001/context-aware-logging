@@ -49,3 +49,5 @@ Phase 1의 핵심 목표는 전통적인 라인 단위 로깅(Line-based Logging
 ---
 
 **결과**: 2,000건의 부하 테스트 결과, 모든 요청이 누락 없이 고유한 `requestId`를 가진 Wide Event로 기록되었으며, 에러 상황에서도 풍부한 맥락(User context, Performance, Metadata)이 보존됨을 확인하며 Phase 1을 성공적으로 마무리했습니다.
+
+https://news.hada.io/topic?id=25239

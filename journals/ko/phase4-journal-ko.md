@@ -361,7 +361,7 @@ Step 5에서 Grounding Verification을 Semantic Caching보다 우선하여 구�
 
 ## 7. 회고 및 교훈 (Reflection & Lessons Learned)
 
-### 7.1 Keep (잘한 점)
+### 7.1 Keep (의미있었던 점)
 
 - **의미 검색의 실질적 유용성 검증**
   - "프리미엄 사용자의 결제 실패"와 같은 자연어 질문에 대해 합리적인 로그 후보를 반환하는 흐름을 end-to-end로 확인
@@ -376,7 +376,7 @@ Step 5에서 Grounding Verification을 Semantic Caching보다 우선하여 구�
 - **단계적 접근의 효과**
   - Step 1부터 Step 5까지 단계적으로 기능을 확장하면서 각 단계에서 검증하고 개선하는 방식이 효과적이었음
 
-### 7.2 Problem (문제점 및 개선 필요 사항)
+### 7.2 Problem (개선 필요 사항 / 아쉬운 점)
 
 - **Query Preprocessing의 한계**
   - 키워드 기반 전처리로 인해 복잡한 자연어 쿼리 처리에 한계
@@ -391,7 +391,7 @@ Step 5에서 Grounding Verification을 Semantic Caching보다 우선하여 구�
 - **복잡한 상관관계 분석 한계**
   - 여러 통계 지표를 결합한 복합 추론 기능은 아직 미지원
 
-### 7.3 Try (향후 시도할 것)
+### 7.3 Try (향후 시도해볼 만한 점)
 
 - **LLM 기반 Query Preprocessing**
   - 복잡한 자연어 쿼리를 더 정확하게 구조화된 형식으로 변환
@@ -426,7 +426,7 @@ Phase 4를 통해 핵심 목표인 **"Search → Explain"**를 완벽하게 달�
 
 단순히 로그를 찾아주는 에이전트에서, 로그의 의미를 이해하고 통계적 수치를 바탕으로 시스템의 상태를 설명해주는 지능형 관찰성 도구로 도약했습니다. 특히 Step 5를 통해 구축한 **Grounding Verification**과 **Semantic Caching**은 프로덕션 수준의 안정성과 성능을 확보하는 데 중요한 기반이 될 것입니다.
 
-**전체적으로 Phase 4 프로젝트는 매우 성공적이었으며, 이제 프로덕션 수준의 안정성과 확장성을 확보하는 Phase 5로 나아갈 준비가 되었습니다.**
+**전체적으로 Phase 4 프로젝트는 성공적이었으며, 이제 프로덕션 수준의 안정성과 확장성을 확보하는 Phase 5로 나아갈 준비가 되었습니다.**
 
 ---
 
