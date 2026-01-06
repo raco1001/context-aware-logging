@@ -1,0 +1,8 @@
+export enum LatencyBucket {
+  P_SUB_50MS = "P_SUB_50MS",
+  P_50_200MS = "P_50_200MS",
+  P_200_500MS = "P_200_500MS",
+  P_500_1000MS = "P_500_1000MS",
+  P_OVER_1000MS = "P_OVER_1000MS",
+  P_UNKNOWN = "P_UNKNOWN",
+}

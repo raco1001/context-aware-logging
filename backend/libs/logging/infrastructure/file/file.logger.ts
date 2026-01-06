@@ -1,8 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { Logger } from '../../core/domain/logger.interface';
-import { WideEvent } from '../../core/domain/wide-event';
+import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
+import { promises as fs } from "fs";
+import { join, dirname } from "path";
+import { ConfigService } from "@nestjs/config";
+import { LoggerPort } from "@logging/out-ports";
+import { WideEvent } from "@logging/domain";
 
 /**
  * FileLogger - Infrastructure layer implementation of Logger interface.
@@ -10,32 +11,35 @@ import { WideEvent } from '../../core/domain/wide-event';
  * No business logic, no context construction - pure I/O.
  */
 @Injectable()
-export class FileLogger implements Logger, OnModuleInit, OnModuleDestroy {
+export class FileLogger
+  extends LoggerPort
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logFilePath: string;
   private logFileHandle: fs.FileHandle | null = null;
 
-  constructor() {
-    // Default to logs/app.log in the project root
-    // Can be overridden via LOG_FILE_PATH environment variable
+  constructor(private readonly configService: ConfigService) {
+    super();
+    const projectRoot = this.configService.get<string>("paths.projectRoot");
+
+    if (!projectRoot) {
+      throw new Error("Project root path not configured");
+    }
+
     this.logFilePath =
-      process.env.LOG_FILE_PATH || join(process.cwd(), 'logs', 'app.log');
+      this.configService.get<string>("LOG_FILE_PATH") ||
+      join(projectRoot, "logs", "app.log");
   }
 
   async onModuleInit(): Promise<void> {
-    // Ensure logs directory exists
-    const logDir = join(this.logFilePath, '..');
+    const logDir = dirname(this.logFilePath);
     try {
       await fs.mkdir(logDir, { recursive: true });
-    } catch {
-      // Directory might already exist, ignore
-    }
+    } catch {}
 
-    // Open file handle for appending
     try {
-      this.logFileHandle = await fs.open(this.logFilePath, 'a');
+      this.logFileHandle = await fs.open(this.logFilePath, "a");
     } catch {
-      // If file open fails, we'll try to create it on first write
-      // Silently fail - fallback to fs.appendFile will handle it
       this.logFileHandle = null;
     }
   }
@@ -53,13 +57,10 @@ export class FileLogger implements Logger, OnModuleInit, OnModuleDestroy {
    */
   async log(event: WideEvent): Promise<void> {
     try {
-      const jsonLine = JSON.stringify(event) + '\n';
+      const jsonLine = JSON.stringify(event) + "\n";
 
-      // Use fs.appendFile for reliability in Phase 1
-      // It handles opening, appending, and flushing correctly
-      await fs.appendFile(this.logFilePath, jsonLine, 'utf8');
+      await fs.appendFile(this.logFilePath, jsonLine, "utf8");
     } catch {
-      // Logging failures should not break the application
       // Silently fail - in production, you might want to emit to a fallback logger or metrics
     }
   }

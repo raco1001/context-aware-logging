@@ -61,6 +61,8 @@ async function run() {
     const batch = data.slice(i, i + batchSize);
     const results = await Promise.all(batch.map((item, j) => sendRequest(item, i + j)));
     successCount += results.filter(Boolean).length;
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
     
     if ((i + batchSize) % 100 === 0 || i + batchSize >= data.length) {
       process.stdout.write('\rProgress: ' + Math.min(i + batchSize, data.length) + '/2000');

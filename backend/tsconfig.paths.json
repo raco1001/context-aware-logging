@@ -1,0 +1,59 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@config": ["libs/config/index"],
+      "@config/utils/*": ["libs/config/utils/*"],
+
+      "@logging": ["libs/logging/logging.module"],
+      "@logging/domain": ["libs/logging/core/domain/index"],
+      "@logging/value-objects": ["libs/logging/core/value-objects/index"],
+      "@logging/out-ports": ["libs/logging/core/ports/out/index"],
+      "@logging/in-ports": ["libs/logging/core/ports/in/index"],
+      "@logging/dtos": ["libs/logging/core/dtos/index"],
+      "@logging/infrastructure": ["libs/logging/infrastructure/index"],
+      "@logging/service": ["libs/logging/service/index"],
+      "@logging/presentation": ["libs/logging/presentation/index"],
+
+      "@embeddings": ["src/embeddings/embeddings.module"],
+      "@embeddings/domain": ["src/embeddings/core/domain/index"],
+      "@embeddings/domain/prompts": [
+        "src/embeddings/core/domain/prompts/index"
+      ],
+      "@embeddings/domain/prompts/implementations": [
+        "src/embeddings/core/domain/prompts/implementations/index"
+      ],
+      "@embeddings/value-objects": ["src/embeddings/core/value-objects/index"],
+      "@embeddings/value-objects/fallbacks/prompts": [
+        "src/embeddings/core/value-objects/fallbacks/prompts/index"
+      ],
+      "@embeddings/value-objects/filter": [
+        "src/embeddings/core/value-objects/filter/index"
+      ],
+      "@embeddings/value-objects/constants": [
+        "src/embeddings/core/value-objects/constants/index"
+      ],
+      "@embeddings/types": ["src/embeddings/core/types/index"],
+      "@embeddings/dtos": ["src/embeddings/core/dtos/index"],
+      "@embeddings/in-ports": ["src/embeddings/core/ports/in/index"],
+      "@embeddings/out-ports": ["src/embeddings/core/ports/out/index"],
+      "@embeddings/utils": ["src/embeddings/core/utils/index"],
+      "@embeddings/infrastructure": ["src/embeddings/infrastructure/index"],
+      "@embeddings/service": ["src/embeddings/service/index"],
+      "@embeddings/service/sub-services": [
+        "src/embeddings/service/sub-services/index"
+      ],
+      "@embeddings/presentation": ["src/embeddings/presentation/index"],
+
+      "@payments": ["src/payments/payments.module"],
+      "@payments/domain": ["src/payments/core/domain/index"],
+      "@payments/value-objects": ["src/payments/core/value-objects/index"],
+      "@payments/dtos": ["src/payments/core/dtos/index"],
+      "@payments/in-ports": ["src/payments/core/ports/in/index"],
+      "@payments/out-ports": ["src/payments/core/ports/out/index"],
+      "@payments/infrastructure": ["src/payments/infrastructure/index"],
+      "@payments/service": ["src/payments/service/index"],
+      "@payments/presentation": ["src/payments/presentation/index"]
+    }
+  }
+}

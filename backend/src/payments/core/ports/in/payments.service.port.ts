@@ -1,5 +1,4 @@
-import { PaymentRequest } from '../../domain/dtos/payment-request';
-import { PaymentResult } from '../../domain/dtos/payment-result';
+import { PaymentRequest, PaymentResult } from "@payments/dtos";
 
 export abstract class PaymentsServicePort {
   abstract processPayment(request: PaymentRequest): Promise<PaymentResult>;

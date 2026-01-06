@@ -1,0 +1,65 @@
+services:
+  atlas_local:
+    build:
+      context: ./mongo
+      dockerfile: Dockerfile
+    hostname: atlas_local
+    ports:
+      - 27016:27017
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=admin
+      - MONGODB_INITDB_ROOT_PASSWORD=admin
+    volumes:
+      - data:/data/db
+      - config:/data/configdb
+
+  zookeeper_local:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper_local
+    container_name: zookeeper_local
+    ports:
+      - 2181:2181
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+
+  kafka_local:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka_local
+    container_name: kafka_local
+    depends_on:
+      - zookeeper_local
+    ports:
+      - 9092:9092
+      - 9093:9093
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper_local:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka_local:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  redis_local:
+    image: redis:7-alpine
+    hostname: redis_local
+    container_name: redis_local
+    ports:
+      - 6379:6379
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+volumes:
+  data:
+  config:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  redis_data:

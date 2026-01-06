@@ -1,30 +1,96 @@
-import { Module, Global } from '@nestjs/common';
-import { LoggingService } from './services/logging.service';
-import { ContextService } from './services/context.service';
-import { FileLogger } from './infrastructure/file/file.logger';
-import { Logger } from './core/domain/logger.interface';
+import { Module, Global, Provider, DynamicModule } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import * as dotenv from "dotenv";
+import {
+  LoggingService,
+  ContextService,
+  MqConsumerService,
+} from "libs/logging/service";
+import {
+  MongoLogger,
+  MongoConnectionClient,
+  KafkaProducerClient,
+  KafkaConsumerClient,
+  KafkaProducer,
+  KafkaLogger,
+  FileLogger,
+} from "@logging/infrastructure";
+import { LoggerPort } from "@logging/out-ports";
+import { MqProducerPort } from "@logging/out-ports";
+import { LoggingInterceptor } from "@logging/presentation";
+import { SamplingPolicy } from "@logging/domain";
+
+// Load environment variables immediately to support dynamic module registration
+dotenv.config();
 
 /**
  * LoggingModule - NestJS module for the logging library.
  *
- * This module is marked as @Global() so it can be imported once in AppModule
- * and used throughout the application without re-importing.
- *
- * The Logger interface is provided via a token, allowing easy replacement
- * of the implementation (e.g., FileLogger -> MongoLogger in Phase 2).
+ * This module uses a dynamic module pattern with global: true
+ * to ensure it's initialized early and destroyed late in the NestJS lifecycle.
  */
-@Global()
-@Module({
-  providers: [
-    ContextService,
-    LoggingService,
-    {
-      provide: 'LOGGER',
-      useClass: FileLogger,
-    },
-    // Also provide FileLogger directly for cases where it's needed
-    FileLogger,
-  ],
-  exports: [LoggingService, ContextService],
-})
-export class LoggingModule {}
+@Module({})
+export class LoggingModule {
+  /**
+   * Standard Dynamic Module for Logging.
+   * Uses process.env.STORAGE_TYPE to determine which infrastructure to load.
+   */
+  static forRoot(): DynamicModule {
+    const storageType = process.env.STORAGE_TYPE || "mongodb";
+
+    const providers: Provider[] = [
+      ContextService,
+      SamplingPolicy,
+      LoggingService,
+      LoggingInterceptor,
+    ];
+
+    const exports: any[] = [LoggingService, ContextService, LoggingInterceptor];
+
+    if (storageType === "file") {
+      console.log("########## File storage type is enabled ##########");
+      providers.push(FileLogger);
+      providers.push({
+        provide: LoggerPort,
+        useClass: FileLogger,
+      });
+      exports.push(LoggerPort);
+    } else if (storageType === "mongodb") {
+      console.log("########## MongoDB storage type is enabled ##########");
+      providers.push(MongoConnectionClient, MongoLogger);
+      providers.push({
+        provide: LoggerPort,
+        useClass: MongoLogger,
+      });
+      exports.push(LoggerPort);
+    } else if (storageType === "kafka") {
+      console.log("########## Kafka storage type is enabled ##########");
+      providers.push(
+        MongoConnectionClient,
+        MongoLogger,
+        KafkaProducerClient,
+        KafkaConsumerClient,
+        KafkaProducer,
+        {
+          provide: MqProducerPort,
+          useClass: KafkaProducer,
+        },
+        {
+          provide: LoggerPort,
+          useFactory: (producer, mongo, config) =>
+            new KafkaLogger(producer, mongo, config),
+          inject: [MqProducerPort, MongoLogger, ConfigService],
+        },
+        MqConsumerService,
+      );
+      exports.push(LoggerPort, MqProducerPort);
+    }
+
+    return {
+      global: true,
+      module: LoggingModule,
+      providers: providers,
+      exports: exports,
+    };
+  }
+}

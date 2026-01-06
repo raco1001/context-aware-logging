@@ -1,19 +1,24 @@
-import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { LoggingModule, LoggingInterceptor } from '../libs/logging';
-import { PaymentsModule } from './payments/payments.module';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
+import pathConfig from "@config/utils/path.config";
+import { LoggingModule } from "@logging";
+import { PaymentsModule } from "@payments";
+import { EmbeddingsModule } from "@embeddings";
 
 @Module({
-  imports: [LoggingModule, PaymentsModule],
-  controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor,
-    },
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ".env",
+      load: [pathConfig],
+    }),
+    LoggingModule.forRoot(),
+    ...(process.env.STORAGE_TYPE === "file" ? [] : [EmbeddingsModule]),
+    PaymentsModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
