@@ -112,7 +112,7 @@ graph LR
     ```bash
       # test_data 디렉토리에 mock 데이터가 담긴 JSON 파일을 생성합니다.
 
-      node run <프로젝트 Root>/test_data/generator.js
+      node <프로젝트 Root>/test_data/generator.js
 
       # backend 가 동작 중인 상태에서 mock 데이터를 기반으로 한 `POST /payments` 요청을 2,000 번 (기본) 생성합니다.
 

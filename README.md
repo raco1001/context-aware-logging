@@ -108,7 +108,7 @@ Observe how a single request is captured as a context-rich JSON "Wide Event".
 
     ```bash
     # Generate mock data in the test_data directory
-    node run <Project Root>/test_data/generator.js
+    node <Project Root>/test_data/generator.js
 
     # Generate 2,000 (default) payment requests using the mock data
     bash <Project Root>/test_data/run_load_test.sh
