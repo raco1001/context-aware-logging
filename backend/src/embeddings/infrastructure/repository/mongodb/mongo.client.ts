@@ -8,8 +8,7 @@ import { ConfigService } from "@nestjs/config";
 import { MongoClient, Db, Collection, Document } from "mongodb";
 
 /**
- * MongoEmbeddingClient - Separate MongoDB connection for the embeddings module.
- * Emphasizes that this module can operate as an independent service.
+ * MongoEmbeddingClient - MongoDB connection for the embeddings module.
  */
 @Injectable()
 export class MongoEmbeddingClient implements OnModuleInit, OnModuleDestroy {

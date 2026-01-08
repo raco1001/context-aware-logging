@@ -1,4 +1,4 @@
-import { PromptTemplate } from "../prompt-template.vo";
+import { PromptTemplate } from "../prompt-template";
 import { PromptTemplateRegistry } from "../prompt-template-registry";
 import { GROUNDING_VERIFICATION_FALLBACK } from "@embeddings/value-objects/fallbacks/prompts";
 

@@ -67,14 +67,12 @@ export class PaymentsService extends PaymentsServicePort {
 
       transactionId = gatewayRes.transactionId!;
 
-      // Add gateway metrics to metadata
       if (gatewayRes.processingTimeMs) {
         this.loggingService.addMetadata({
           gatewayProcessingTimeMs: gatewayRes.processingTimeMs,
         });
       }
     } catch (e) {
-      // Pass through adapter error as-is
       const error = this.parseAdapterError(e as Error);
       if (error.service) {
         this.loggingService.setService(error.service);
@@ -96,13 +94,11 @@ export class PaymentsService extends PaymentsServicePort {
         request.amount,
       );
 
-      // Add order info to metadata
       this.loggingService.addMetadata({
         orderId: orderRes.orderId,
         confirmedAt: orderRes.confirmedAt,
       });
 
-      // Reset service to 'payments' for final success state
       this.loggingService.setService("payments");
 
       return {
@@ -111,7 +107,6 @@ export class PaymentsService extends PaymentsServicePort {
         orderId: orderRes.orderId,
       };
     } catch (e) {
-      // Pass through adapter error as-is
       const error = this.parseAdapterError(e as Error);
       if (error.service) {
         this.loggingService.setService(error.service);
@@ -132,7 +127,6 @@ export class PaymentsService extends PaymentsServicePort {
     try {
       return JSON.parse(e.message) as AdapterError;
     } catch {
-      // Fallback for unexpected error format
       return {
         code: PaymentStatusCode.GATEWAY_ERROR,
         message: e.message,

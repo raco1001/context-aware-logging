@@ -1,4 +1,4 @@
-import { PromptTemplate } from "../prompt-template.vo";
+import { PromptTemplate } from "../prompt-template";
 import { PromptTemplateRegistry } from "../prompt-template-registry";
 import { QueryMetadata } from "@embeddings/dtos";
 
@@ -23,7 +23,6 @@ export class StatisticalAnalysisPrompt extends PromptTemplate {
       .replace("{{currentTime}}", currentTime.toISOString())
       .replace("{{query}}", params.query);
 
-    // Add initial metadata context if provided
     if (params.initialMetadata) {
       const metadataJson = JSON.stringify(
         {

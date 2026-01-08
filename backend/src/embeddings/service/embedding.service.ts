@@ -5,6 +5,10 @@ import { EmbeddingPort, LogStoragePort } from "@embeddings/out-ports";
 import { chunkByFields, shouldChunk, Chunk } from "../core/utils/chunking.util";
 import { SummaryEnrichmentService } from "./sub-services/summary-enrichment.service";
 
+/**
+ * EmbeddingService - Service for embedding operations.
+ * Handles batch embedding and search requests.
+ */
 @Injectable()
 export class EmbeddingService extends EmbeddingUseCase {
   private readonly logger = new Logger(EmbeddingService.name);
@@ -132,6 +136,9 @@ export class EmbeddingService extends EmbeddingUseCase {
     return processedCount;
   }
 
+  /**
+   * Performs semantic search using vector similarity.
+   */
   async search(query: string, limit: number = 5): Promise<any[]> {
     this.logger.log(`Searching for semantic matches: "${query}"`);
 
@@ -140,6 +147,9 @@ export class EmbeddingService extends EmbeddingUseCase {
     return this.logStoragePort.vectorSearch(embedding, limit);
   }
 
+  /**
+   * Manually triggers embedding for a specific request ID.
+   */
   async embedByRequestId(requestId: string): Promise<void> {
     this.logger.warn(`Single log embedding for ${requestId} requested`);
   }

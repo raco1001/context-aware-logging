@@ -2,6 +2,10 @@ import { Controller, Get, Query, Logger } from "@nestjs/common";
 import { SearchUseCase } from "@embeddings/in-ports";
 import { Service } from "@logging/presentation";
 
+/**
+ * SearchController - Controller for search operations.
+ * Handles RAG queries and chat history retrieval.
+ */
 @Controller("search")
 @Service("embeddings")
 export class SearchController {

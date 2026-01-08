@@ -50,7 +50,7 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {}
 
   async onModuleDestroy(): Promise<void> {
-    // If it's still connected, the service might have failed to close it or wasn't used.
+    // Future:If it's still connected, the service might have failed to close it or wasn't used.
     if (this.isConnected) {
       this.logger.log(
         "onModuleDestroy: Forcefully disconnecting Kafka consumer client...",

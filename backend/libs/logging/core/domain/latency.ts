@@ -1,8 +1,11 @@
-import { LatencyBucket } from '../value-objects';
+import { LatencyBucket } from "../value-objects";
 
+/**
+ * Latency - Utility class for determining latency buckets.
+ */
 export class Latency {
   /**
-   * durationMs를 기반으로 적절한 LatencyBucket을 반환하는 정적 메서드
+   * Returns the appropriate LatencyBucket based on the duration in milliseconds.
    */
   static getBucket(durationMs?: number): LatencyBucket {
     if (durationMs === undefined || durationMs === null)

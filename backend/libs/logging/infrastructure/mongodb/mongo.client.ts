@@ -34,7 +34,7 @@ export class MongoConnectionClient implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`Successfully connected to MongoDB: ${this.dbName}`);
     } catch (error) {
       this.logger.error(`Failed to connect to MongoDB: ${error.message}`);
-      // In a real production app, we might want to retry or handle this more gracefully
+      // Future:Retry or handle this more gracefully.
       throw error;
     }
   }

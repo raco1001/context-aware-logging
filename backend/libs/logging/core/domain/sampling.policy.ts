@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { LoggingContext } from "./context";
 
 /**
- * Sampling decision result with explanation for debugging/auditing.
+ * SamplingDecision - Result of sampling decision with explanation.
  */
 export interface SamplingDecision {
   shouldRecord: boolean;
@@ -11,35 +11,35 @@ export interface SamplingDecision {
 }
 
 /**
- * Reasons for sampling decisions - useful for debugging and policy verification.
+ * SamplingReason - Reasons for sampling decisions.
  */
 export enum SamplingReason {
-  // Always recorded
+  /**
+   * Always recorded.
+   */
   HAS_ERROR = "HAS_ERROR",
   SLOW_REQUEST = "SLOW_REQUEST",
   CRITICAL_ROUTE = "CRITICAL_ROUTE",
 
-  // Probabilistically sampled
+  /**
+   * Probabilistically sampled.
+   */
   SAMPLED_NORMAL = "SAMPLED_NORMAL",
   NOT_SAMPLED = "NOT_SAMPLED",
 }
 
 /**
  * SamplingPolicy - Determines which logs to persist based on configurable rules.
- *
- * Design Principles:
- * 1. **Deterministic**: Same requestId always produces the same decision (hash-based).
- * 2. **Explainable**: Every decision has a clear reason.
- * 3. **100% Signal Retention**: Errors and slow requests are never sampled out.
- *
- * Configuration (via environment variables):
- * - LOG_SAMPLING_NORMAL_RATE: 0.01 (1% of normal requests)
- * - LOG_SLOW_THRESHOLD_MS: 2000 (requests slower than 2s are always recorded)
- * - LOG_CRITICAL_ROUTES: comma-separated list of routes to always record
  */
 @Injectable()
 export class SamplingPolicy {
+  /**
+   * The normal rate of sampling.
+   */
   private readonly normalRate: number;
+  /**
+   * The slow threshold in milliseconds.
+   */
   private readonly slowThresholdMs: number;
   private readonly criticalRoutes: Set<string>;
 

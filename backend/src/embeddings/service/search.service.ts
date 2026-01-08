@@ -24,6 +24,10 @@ import {
   SemanticCacheService,
 } from "@embeddings/service/sub-services";
 
+/**
+ * SearchService - Service for search operations.
+ * Handles RAG queries and chat history retrieval.
+ */
 @Injectable()
 export class SearchService extends SearchUseCase {
   private readonly logger = new Logger(SearchService.name);

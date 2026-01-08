@@ -61,7 +61,7 @@ export class FileLogger
 
       await fs.appendFile(this.logFilePath, jsonLine, "utf8");
     } catch {
-      // Silently fail - in production, you might want to emit to a fallback logger or metrics
+      // Future:Silently fail and emit to a fallback logger or metrics.
     }
   }
 }

@@ -187,7 +187,5 @@ export class LoggingService implements OnModuleDestroy {
   /**
    * Cleanup on module destroy.
    */
-  onModuleDestroy(): void {
-    // Any cleanup needed
-  }
+  onModuleDestroy(): void {}
 }

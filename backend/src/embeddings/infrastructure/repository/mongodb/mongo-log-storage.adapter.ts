@@ -6,6 +6,10 @@ import { EmbeddingStatus } from "@logging/value-objects";
 import { QueryMetadata } from "@embeddings/dtos";
 import { WideEvent } from "@logging/domain";
 
+/**
+ * MongoLogStorageAdapter - Infrastructure layer implementation of LogStoragePort.
+ * Persists embedding results to MongoDB and provides search capabilities.
+ */
 @Injectable()
 export class MongoLogStorageAdapter extends LogStoragePort {
   private readonly logger = new Logger(MongoLogStorageAdapter.name);
@@ -17,6 +21,9 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     super();
   }
 
+  /**
+   * Retrieves the last processed watermark for a given source.
+   */
   async getWatermark(source: string): Promise<Watermark | null> {
     try {
       const collection = this.client.getCollection(this.progressCollection);
@@ -36,6 +43,9 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     }
   }
 
+  /**
+   * Retrieves logs that need embedding starting after the given watermark.
+   */
   async findLogsAfterWatermark(
     source: string,
     watermark: Watermark | null,
@@ -65,7 +75,6 @@ export class MongoLogStorageAdapter extends LogStoragePort {
         .toArray();
 
       return docs.map((doc) => {
-        // Construct WideEvent from MongoDB document for Dual-layer Summary generation
         const wideEvent = new WideEvent({
           requestId: doc.requestId,
           timestamp:
@@ -101,6 +110,9 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     }
   }
 
+  /**
+   * Saves embedding results to the destination collection and updates the watermark.
+   */
   async saveEmbeddingsAndUpdateWatermark(
     source: string,
     results: Array<{
@@ -121,13 +133,13 @@ export class MongoLogStorageAdapter extends LogStoragePort {
       if (results.length > 0) {
         const insertDocs = results.map((r) => ({
           eventId: r.eventId,
-          requestId: r.requestId, // For grounding - links back to original wide_events
-          summary: r.summary, // Dual-layer summary (narrative + canonical)
+          requestId: r.requestId,
+          summary: r.summary,
           model: r.model,
           embedding: r.embedding,
           service: r.service,
-          timestamp: r.timestamp || new Date(), // Original event timestamp
-          createdAt: new Date(), // Embedding creation timestamp
+          timestamp: r.timestamp || new Date(),
+          createdAt: new Date(),
         }));
         await embeddedColl.insertMany(insertDocs);
       }
@@ -155,10 +167,16 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     }
   }
 
+  /**
+   * Logs a failure for a specific request.
+   */
   async logFailure(requestId: string, reason: string): Promise<void> {
     this.logger.error(`Embedding failure for ${requestId}: ${reason}`);
   }
 
+  /**
+   * Performs semantic search using vector similarity with optional metadata filtering.
+   */
   async vectorSearch(
     embedding: number[],
     limit: number,
@@ -167,7 +185,6 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     try {
       const collection = this.client.getCollection(this.embeddedCollection);
 
-      // Check if collection has any documents
       const totalCount = await collection.countDocuments();
       this.logger.log(
         `Vector search: Collection "${this.embeddedCollection}" has ${totalCount} documents`,
@@ -182,16 +199,12 @@ export class MongoLogStorageAdapter extends LogStoragePort {
 
       const filter: any = {};
       if (metadata) {
-        // Use timestamp (original event time) for time-based filtering
-        // This matches the actual event occurrence time, not embedding creation time
         if (metadata.startTime || metadata.endTime) {
           filter.timestamp = {};
           if (metadata.startTime) filter.timestamp.$gte = metadata.startTime;
           if (metadata.endTime) filter.timestamp.$lte = metadata.endTime;
         }
-        // Service filter: Use case-insensitive matching or remove if too strict
         if (metadata.service) {
-          // Try exact match first, but log if filtering
           filter.service = metadata.service;
           this.logger.debug(`Applying service filter: "${metadata.service}"`);
         }
@@ -230,7 +243,6 @@ export class MongoLogStorageAdapter extends LogStoragePort {
       try {
         results = await collection.aggregate(pipeline).toArray();
       } catch (error: any) {
-        // Check if error is related to missing search index
         if (
           error.message?.includes("index") ||
           error.message?.includes("vectorSearch") ||
@@ -253,7 +265,6 @@ export class MongoLogStorageAdapter extends LogStoragePort {
         `Vector search completed: ${results.length} results (requested: ${limit})`,
       );
 
-      // If no results with filter, try without service filter as fallback
       if (results.length === 0 && filter.service) {
         this.logger.warn(
           `No results with service filter "${filter.service}". Trying without service filter...`,
@@ -284,6 +295,9 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     }
   }
 
+  /**
+   * Retrieves full log documents by their internal IDs.
+   */
   async getLogsByEventIds(eventIds: any[]): Promise<any[]> {
     try {
       const collection = this.client.getCollection(this.logsCollection);
@@ -294,6 +308,10 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     }
   }
 
+  /**
+   * Execute aggregation pipeline on a collection.
+   * Used for statistical queries (e.g., error code counts, top N analysis).
+   */
   async executeAggregation(
     pipeline: any[],
     collectionName: string = "wide_events",
@@ -318,7 +336,7 @@ export class MongoLogStorageAdapter extends LogStoragePort {
   }
 
   /**
-   * Grounding: Fetch full log documents by their request IDs.
+   * Fetches full log documents by their request IDs.
    */
   async findLogsByRequestIds(requestIds: string[]): Promise<any[]> {
     try {

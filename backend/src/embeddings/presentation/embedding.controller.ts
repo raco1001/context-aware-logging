@@ -11,6 +11,10 @@ import { EmbeddingUseCase } from "@embeddings/in-ports";
 import { ConfigService } from "@nestjs/config";
 import { Service } from "@logging/presentation";
 
+/**
+ * EmbeddingController - Controller for embedding operations.
+ * Handles batch embedding and search requests.
+ */
 @Controller("embeddings")
 @Service("embeddings")
 export class EmbeddingController {

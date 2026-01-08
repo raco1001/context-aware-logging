@@ -42,7 +42,6 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
     // Basic validation (not mock - real business rule)
     if (amount < 1 || count < 1) return false;
 
-    // Use PaymentStatusVO to determine outcome
     const outcome = PaymentStatusVO.determineBalanceOutcome();
     return outcome.isSuccess() || outcome.isSlow();
   }
@@ -50,10 +49,8 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
   async callGateway(userId: string, amount: number): Promise<GatewayResponse> {
     const startTime = Date.now();
 
-    // Use PaymentStatusVO to determine outcome
     const outcome = PaymentStatusVO.determineGatewayOutcome();
 
-    // Apply appropriate latency based on outcome
     if (outcome.isSlow()) {
       await PaymentStatusVO.simulateLatency(
         this.LATENCY.GATEWAY_SLOW.min,
@@ -68,7 +65,6 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
 
     const processingTimeMs = Date.now() - startTime;
 
-    // Handle error outcomes
     if (outcome.isError()) {
       throw new Error(
         JSON.stringify({
@@ -80,7 +76,6 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
       );
     }
 
-    // Success or slow success
     return {
       success: true,
       transactionId: PaymentStatusVO.generateTransactionId(),
@@ -93,10 +88,8 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
     transactionId: string,
     amount: number,
   ): Promise<OrderConfirmationResponse> {
-    // Use PaymentStatusVO to determine outcome
     const outcome = PaymentStatusVO.determineOrderOutcome();
 
-    // Apply appropriate latency based on outcome
     if (outcome.isSlow()) {
       await PaymentStatusVO.simulateLatency(
         this.LATENCY.ORDER_SLOW.min,
@@ -104,7 +97,6 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
       );
     }
 
-    // Handle error outcomes
     if (outcome.isError()) {
       throw new Error(
         JSON.stringify({
@@ -115,7 +107,6 @@ export class PaymentsOutAdapter implements PaymentsOutPort {
       );
     }
 
-    // Success or slow success
     return {
       success: true,
       orderId: PaymentStatusVO.generateOrderId(),

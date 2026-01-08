@@ -1,4 +1,4 @@
-import { PromptTemplate } from "../prompt-template.vo";
+import { PromptTemplate } from "../prompt-template";
 import { PromptTemplateRegistry } from "../prompt-template-registry";
 import { QUERY_METADATA_SYNTHESIS_FALLBACK } from "src/embeddings/core/value-objects/fallbacks/prompts";
 /**

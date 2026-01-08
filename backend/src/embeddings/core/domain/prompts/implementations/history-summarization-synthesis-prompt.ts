@@ -1,4 +1,4 @@
-import { PromptTemplate } from "../prompt-template.vo";
+import { PromptTemplate } from "../prompt-template";
 import { PromptTemplateRegistry } from "../prompt-template-registry";
 import { AnalysisResult } from "@embeddings/dtos";
 import { HISTORY_SUMMARIZATION_FALLBACK } from "@embeddings/value-objects/fallbacks/prompts";
