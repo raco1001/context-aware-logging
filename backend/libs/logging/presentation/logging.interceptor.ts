@@ -10,7 +10,9 @@ import { Observable, throwError } from "rxjs";
 import { catchError, finalize } from "rxjs/operators";
 import { Request } from "express";
 import { randomUUID } from "crypto";
-import { LoggingService, ContextService } from "libs/logging/service";
+import { Inject } from "@nestjs/common";
+import { LoggingUseCase } from "@logging/in-ports";
+import { ContextService } from "libs/logging/service";
 
 /**
  * LoggingInterceptor - Automatically logs every HTTP request as a Wide Event.
@@ -28,7 +30,8 @@ export class LoggingInterceptor implements NestInterceptor {
   private readonly SERVICE_METADATA_KEY = "service";
 
   constructor(
-    private readonly loggingService: LoggingService,
+    @Inject(LoggingUseCase)
+    private readonly loggingUseCase: LoggingUseCase,
     private readonly contextService: ContextService,
     private readonly reflector: Reflector,
   ) {}
@@ -53,7 +56,7 @@ export class LoggingInterceptor implements NestInterceptor {
       process.env.SERVICE_NAME ||
       "backend";
 
-    const loggingContext = this.loggingService.initializeContext(
+    const loggingContext = this.loggingUseCase.initializeContext(
       requestId,
       serviceName,
       `${request.method} ${request.route?.path || request.path}`,
@@ -98,7 +101,7 @@ export class LoggingInterceptor implements NestInterceptor {
           const durationMs = Date.now() - startTime;
           loggingContext.performance = { durationMs };
 
-          this.loggingService.finalize(loggingContext).catch(() => {});
+          this.loggingUseCase.finalize(loggingContext).catch(() => {});
         }),
       );
     });

@@ -82,14 +82,7 @@ docker-compose up -d
 
 ### Phase 1: 와이드 이벤트 로깅 (Local JSON)
 
-```mermaid
-graph LR
-    A[HTTP 요청] --> B[로깅 인터셉터]
-    B --> C[ContextService<br/>AsyncLocalStorage]
-    C --> D[로깅 서비스]
-    D --> E[FileLoggerAdapter]
-    E --> F[(app.log<br/>JSON 라인)]
-```
+![Phase 1 Architecture](./docs/images/phase1.png)
 
 하나의 요청이 어떻게 풍부한 맥락(Context)을 가진 JSON 데이터로 남는지 확인합니다.
 
@@ -123,14 +116,7 @@ graph LR
 
 ### Phase 2: MongoDB 영속화 및 쿼리
 
-```mermaid
-graph LR
-    A[HTTP 요청] --> B[로깅 인터셉터]
-    B --> C[로깅 서비스]
-    C --> D[MongoLoggerAdapter]
-    D --> E[(MongoDB<br/>시계열 컬렉션)]
-    E --> F[통계적 집계/분석]
-```
+![Phase2 Architecture](./docs/images/phase2.png)
 
 로컬 파일에 저장되던 로그를 MongoDB 시계열 컬렉션에 저장하여 쿼리 가능한 데이터로 전환합니다.
 
@@ -158,14 +144,7 @@ graph LR
 
 ### Phase 3: RAG 기반 시맨틱 저장 (Vector DB)
 
-```mermaid
-graph TD
-    A[(MongoDB<br/>wide_events)] --> B[EmbeddingUseCase]
-    B --> C{결정론적 요약<br/>Deterministic Summary}
-    C --> D[Voyage AI SDK]
-    D --> E[벡터 임베딩]
-    E --> F[(MongoDB Atlas<br/>벡터 검색)]
-```
+![Phase3 Architecture](./docs/images/phase3-ko.png)
 
 로그 데이터를 요약(Summarization)하고 벡터화하여 의미 검색이 가능한 형태로 저장합니다.
 
@@ -198,16 +177,7 @@ graph TD
 
 ### Phase 4: 지능형 로그 분석 (RAG Search)
 
-```mermaid
-graph TD
-    A[자연어 질의] --> B[SearchService]
-    B --> C[질의 전처리기]
-    C --> D[벡터 검색]
-    D --> E[Voyage 재순위화]
-    E --> F[그라운딩 팩]
-    F --> G[Gemini 답변 합성]
-    G --> H[증거 기반 답변]
-```
+![Phase4 Architecture](./docs/images/phase4-ko.png)
 
 자연어로 로그 데이터에 대해 질문하고 AI의 분석 답변을 받습니다.
 
@@ -266,21 +236,7 @@ graph TD
 
 ### Phase 5: 운영 안정화 (Hardening)
 
-```mermaid
-graph TD
-    subgraph "비동기 로깅 파이프라인"
-    L1[요청] --> L2[샘플링 정책]
-    L2 -- "샘플링됨" --> L3[KafkaLoggerAdapter]
-    L3 --> L4[[Kafka]]
-    L4 --> L5[MQ 컨슈머]
-    L5 --> L6[(MongoDB)]
-    end
-
-    subgraph "분산 캐싱"
-    C1[검색 질의] --> C2[SearchService]
-    C2 <--> C3[(Redis)]
-    end
-```
+![Phase5 Architecture](./docs/images/phase5-ko.png)
 
 Kafka를 통한 로그 수집 디커플링, Redis 캐싱, 샘플링 전략을 통해 시스템을 견고하게 만듭니다.
 
@@ -337,7 +293,31 @@ Kafka를 통한 로그 수집 디커플링, Redis 캐싱, 샘플링 전략을 �
   ```
 
 - **테스트 방법**: 대량의 요청을 보내거나 Kafka 인프라를 일시 정지시켜 폴백(Fallback) 로직이 작동하는지 확인합니다.
+  - ex. Kafka 컨테이너 중지
+
+  ```bash
+  cd <root>/docker
+
+  docker compose stop kafka_local
+  ```
+
 - **결과 확인**: 시스템 부하가 조절되고, 장애 상황에서도 로그 유실 없이 안전하게 처리됩니다.
+  - 기타 결과 확인:
+    - Kafka Topic 확인
+
+      ```bash
+      # Kafka 컨테이너에 접속
+      docker exec -it kafka_local bash
+
+      # 토픽 목록 확인
+      kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+      # 토픽 상세 정보
+      kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic log-events
+
+      # Consumer Group 상태 확인
+      kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group log-consumer-group --describe
+      ```
 
 ---
 

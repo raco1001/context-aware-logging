@@ -49,6 +49,43 @@ Phase 5는 애플리케이션 성능에 영향을 주지 않으면서 프로덕�
 - PoC 단계에서는 복잡한 전달 보장(Delivery Guarantees)보다 **지연 시간 디커플링**을 우선시합니다.
 - 효율성을 위해 MongoDB에 배치(Batch)로 저장합니다 (예: 1초마다 또는 100개 이벤트마다).
 
+### Kafka Topic 확인
+
+```bash
+# Kafka 컨테이너에 접속
+docker exec -it kafka_local bash
+
+# 토픽 목록 확인
+kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# 토픽 상세 정보
+kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic log-events
+
+# Consumer Group 상태 확인
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group log-consumer-group --describe
+```
+
+### 로그 확인
+
+애플리케이션 로그에서 다음을 확인할 수 있습니다:
+
+- **Publish 성공**: `Published log event to Kafka topic: log-events, requestId: ...`
+- **Batch 처리**: `Processed batch: X events (Y success, Z failures) in Wms`
+- **Fallback**: `MQ publish failed, falling back to direct logging`
+
+## 성능 개선 효과
+
+### Before (동기 로깅)
+
+- API 응답 시간 = 비즈니스 로직 + MongoDB 쓰기 시간
+- MongoDB 지연이 API 응답에 직접 영향
+
+### After (비동기 로깅)
+
+- API 응답 시간 = 비즈니스 로직 + Kafka publish 시간 (매우 빠름)
+- MongoDB 쓰기는 백그라운드에서 처리
+- **예상 개선**: API 응답 시간 50-90% 감소 (MongoDB 쓰기 시간에 따라)
+
 ### 2단계: Redis 기반 분산 캐싱
 
 **목표**: 분산 배포 환경을 지원하고 인스턴스 간 캐시 일관성을 유지합니다.

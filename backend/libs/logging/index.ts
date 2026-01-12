@@ -8,6 +8,7 @@ export { LoggingModule } from "./logging.module";
 
 // Services
 export { LoggingService } from "./service/logging.service";
+export { LoggingUseCase } from "./core/ports/in/logging.use-case";
 export { ContextService } from "./service/context.service";
 
 // Interceptors

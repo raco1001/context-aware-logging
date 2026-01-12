@@ -11,4 +11,4 @@
 */**/dist
 test_data/payments_data.json
 */**/.env
-docs/final-audit
+docs/ko/audit

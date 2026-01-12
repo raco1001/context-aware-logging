@@ -5,6 +5,7 @@ import {
   LoggingService,
   ContextService,
   MqConsumerService,
+  LoggingModeService,
 } from "libs/logging/service";
 import {
   MongoLogger,
@@ -17,6 +18,7 @@ import {
 } from "@logging/infrastructure";
 import { LoggerPort } from "@logging/out-ports";
 import { MqProducerPort } from "@logging/out-ports";
+import { LoggingUseCase } from "@logging/in-ports";
 import { LoggingInterceptor } from "@logging/presentation";
 import { SamplingPolicy } from "@logging/domain";
 
@@ -41,11 +43,20 @@ export class LoggingModule {
     const providers: Provider[] = [
       ContextService,
       SamplingPolicy,
+      {
+        provide: LoggingUseCase,
+        useClass: LoggingService,
+      },
       LoggingService,
       LoggingInterceptor,
     ];
 
-    const exports: any[] = [LoggingService, ContextService, LoggingInterceptor];
+    const exports: any[] = [
+      LoggingUseCase,
+      LoggingService,
+      ContextService,
+      LoggingInterceptor,
+    ];
 
     if (storageType === "file") {
       console.log("########## File storage type is enabled ##########");
@@ -71,15 +82,21 @@ export class LoggingModule {
         KafkaProducerClient,
         KafkaConsumerClient,
         KafkaProducer,
+        LoggingModeService,
         {
           provide: MqProducerPort,
           useClass: KafkaProducer,
         },
         {
           provide: LoggerPort,
-          useFactory: (producer, mongo, config) =>
-            new KafkaLogger(producer, mongo, config),
-          inject: [MqProducerPort, MongoLogger, ConfigService],
+          useFactory: (producer, mongo, modeService, config) =>
+            new KafkaLogger(producer, mongo, modeService, config),
+          inject: [
+            MqProducerPort,
+            MongoLogger,
+            LoggingModeService,
+            ConfigService,
+          ],
         },
         MqConsumerService,
       );

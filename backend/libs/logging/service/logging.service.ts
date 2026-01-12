@@ -7,28 +7,33 @@ import {
   SamplingPolicy,
   SamplingReason,
 } from "@logging/domain";
+import { LoggingUseCase } from "@logging/in-ports";
 import { ContextService } from "./context.service";
 import { LatencyBucket } from "@logging/value-objects";
 
 /**
  * LoggingService - Application layer service for managing Wide Events.
  * Responsible for constructing Wide Events from context and delegating to Logger.
+ *
+ * Implements LoggingUseCase to follow Hexagonal Architecture pattern.
  */
 @Injectable()
-export class LoggingService implements OnModuleDestroy {
+export class LoggingService extends LoggingUseCase implements OnModuleDestroy {
   private readonly serviceLogger = new Logger(LoggingService.name);
 
   constructor(
     private readonly contextService: ContextService,
     private readonly logger: LoggerPort,
     private readonly samplingPolicy: SamplingPolicy,
-  ) {}
+  ) {
+    super();
+  }
 
   /**
    * Initialize logging context for a new request.
    * Should be called at the start of each HTTP request.
    */
-  initializeContext(
+  override initializeContext(
     requestId: string,
     service: string,
     route: string,
@@ -46,28 +51,28 @@ export class LoggingService implements OnModuleDestroy {
   /**
    * Add user context to the current request.
    */
-  addUserContext(user: { id: string; role: string }): void {
+  override addUserContext(user: { id: string; role: string }): void {
     this.contextService.addUserContext(user);
   }
 
   /**
    * Add error context to the current request.
    */
-  addError(error: { code: string; message: string }): void {
+  override addError(error: { code: string; message: string }): void {
     this.contextService.addError(error);
   }
 
   /**
    * Add performance metrics to the current request.
    */
-  addPerformance(performance: { durationMs: number }): void {
+  override addPerformance(performance: { durationMs: number }): void {
     this.contextService.addPerformance(performance);
   }
 
   /**
    * Add domain-specific metadata to the current request.
    */
-  addMetadata(metadata: Record<string, any>): void {
+  override addMetadata(metadata: Record<string, any>): void {
     const currentContext = this.contextService.getContext();
     const existingMetadata = currentContext?._metadata || {};
     this.contextService.updateContext({
@@ -89,7 +94,7 @@ export class LoggingService implements OnModuleDestroy {
    *   // Error will be logged under 'paymentGateway' service
    * }
    */
-  setService(service: string): void {
+  override setService(service: string): void {
     this.contextService.setService(service);
   }
 
@@ -103,7 +108,7 @@ export class LoggingService implements OnModuleDestroy {
    * - Errors and slow requests are always recorded (100% retention).
    * - Normal requests are sampled based on configured rate.
    */
-  async finalize(explicitContext?: LoggingContext): Promise<void> {
+  override async finalize(explicitContext?: LoggingContext): Promise<void> {
     const context = explicitContext || this.contextService.getContext();
     if (!context) {
       // No context available, skip logging
