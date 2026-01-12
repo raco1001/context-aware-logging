@@ -4,7 +4,23 @@
 
 Phase 5의 핵심 목표는 **"Production Hardening"**으로, 시스템의 안정성, 확장성, 그리고 비용 효율성을 실무 수준으로 끌어올리는 것이었습니다. Phase 4까지 구축된 지능형 로그 분석 기능을 실제 대규모 트래픽 환경에서도 안전하고 저비용으로 운영할 수 있도록 인프라 구조를 혁신하는 데 집중했습니다.
 
-주요 성과:
+### 아키텍처
+
+```
+LoggingService.finalize()
+    ↓
+MqLoggerAdapter (LoggerPort 구현)
+    ↓ (비동기 publish)
+Kafka Topic: log-events
+    ↓ (백그라운드 consume)
+MqConsumerService
+    ↓ (배치 처리)
+MongoLogger
+    ↓
+MongoDB (wide_events collection)
+```
+
+### 주요 성과:
 
 - **Asynchronous Pipeline**: 로깅 부하가 애플리케이션 성능에 영향을 주지 않도록 비동기 파이프라인 구축
 - **Distributed Scalability**: 인메모리 상태 관리에서 Redis 기반 분산 캐시 구조로 전환
@@ -175,6 +191,16 @@ MQ 또는 Redis 장애 시 시스템이 멈추지 않고 로컬 파일이나 직
 
 ## 8. 결과
 
-Phase 5를 통해 이 프로젝트는 단순한 '기능 구현' 단계 이후로도 **'운영 가능한 시스템'**을 고려해볼 수 있었습니다. 이제 수천 명의 사용자가 동시에 접속하여 로그를 쏟아내더라도, 시스템은 가장 중요한 에러 정보를 놓치지 않으면서도 안정적으로 동작할 것입니다.
+Phase 5를 통해 이 프로젝트는 단순한 '기능 구현' 단계 이후로도 **'운영 가능한 시스템'**을 고려해볼 수 있었습니다.
 
 이러한 인프라적 단단함은 앞으로 진행할 Phase 6의 '자율 지능(Autonomous Intelligence)' 단계에서 AI Agent를 도입할 수 있는 최소한의 토대를 마련했습니다.
+
+## 참고 자료
+
+- [KafkaJS Documentation](https://kafka.js.org/)
+- [Confluent Kafka Docker Images](https://docs.confluent.io/platform/current/installation/docker/config-reference.html)
+
+---
+
+- 감사합니다.
+- 트렌드 파악하기

@@ -19,6 +19,11 @@ export abstract class MqProducerPort {
   ): Promise<void>;
 
   /**
+   * Check if the producer is currently connected.
+   */
+  abstract isConnected(): boolean;
+
+  /**
    * Connect to the message queue.
    */
   abstract connect(): Promise<void>;

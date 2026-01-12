@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Kafka, Producer, logLevel } from "kafkajs";
+import * as net from "net";
 
 /**
  * KafkaProducerClient - Infrastructure client for initializing and managing Kafka Producer.
@@ -21,6 +22,9 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
   private producer: Producer;
   private readonly broker: string;
   private isConnected = false;
+  private watchdogTimer: NodeJS.Timeout | null = null;
+  private consecutiveSuccessCount = 0;
+  private readonly STABILITY_THRESHOLD = 3;
 
   constructor(private readonly configService: ConfigService) {
     this.broker =
@@ -42,17 +46,83 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    const { CONNECT, DISCONNECT } = this.producer.events;
+    this.producer.on(CONNECT, () => {
+      this.isConnected = true;
+      this.logger.log("Kafka Producer connected");
+    });
+    this.producer.on(DISCONNECT, () => {
+      this.isConnected = false;
+      this.logger.warn("Kafka Producer disconnected");
+      this.startWatchdog();
+    });
+
     this.logger.log(
       `Kafka Producer client initialized for broker: ${this.broker}`,
     );
   }
 
   async onModuleInit(): Promise<void> {
-    await this.connect();
+    this.initialConnect();
+  }
+
+  private async initialConnect(): Promise<void> {
+    try {
+      const isAvailable = await this.checkBrokerAvailability();
+      if (!isAvailable) {
+        throw new Error("Broker not reachable via TCP");
+      }
+      await this.connect();
+    } catch (error) {
+      this.logger.warn(
+        `Kafka Broker(${this.broker}) unavailable at startup. Operating in fallback mode. Error: ${error.message}`,
+      );
+      this.isConnected = false;
+      this.startWatchdog();
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.stopWatchdog();
     await this.disconnect();
+  }
+
+  private startWatchdog(): void {
+    if (this.watchdogTimer) return;
+    this.consecutiveSuccessCount = 0;
+
+    this.watchdogTimer = setInterval(async () => {
+      try {
+        const isAvailable = await this.checkBrokerAvailability();
+        if (isAvailable) {
+          this.consecutiveSuccessCount++;
+          this.logger.debug(
+            `Watchdog: Kafka available (${this.consecutiveSuccessCount}/${this.STABILITY_THRESHOLD})`,
+          );
+
+          if (this.consecutiveSuccessCount >= this.STABILITY_THRESHOLD) {
+            this.logger.log(
+              "Watchdog: Kafka Broker is stable. Reconnecting...",
+            );
+            this.consecutiveSuccessCount = 0;
+            await this.connect();
+            this.stopWatchdog();
+          }
+        } else {
+          this.consecutiveSuccessCount = 0;
+          this.logger.debug("Watchdog: Kafka Broker is still offline.");
+        }
+      } catch (error) {
+        this.consecutiveSuccessCount = 0;
+      }
+    }, 30000);
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
   }
 
   /**
@@ -100,6 +170,34 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Performs a silent TCP check to see if the Kafka broker is available.
+   * This avoids triggering heavy KafkaJS connection logic and error logging.
+   */
+  async checkBrokerAvailability(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const [host, portStr] = this.broker.split(":");
+      const port = parseInt(portStr || "9092", 10);
+
+      const socket = net.createConnection({ host, port, timeout: 1000 });
+
+      socket.on("connect", () => {
+        socket.destroy();
+        resolve(true);
+      });
+
+      socket.on("error", () => {
+        socket.destroy();
+        resolve(false);
+      });
+
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
+  }
+
+  /**
    * Returns the initialized Kafka Producer instance.
    * This is the single source of truth for the Kafka Producer.
    *
@@ -117,5 +215,21 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
    */
   isProducerConnected(): boolean {
     return this.isConnected;
+  }
+
+  /**
+   * Manually trigger a connection check and update status.
+   * Useful when an external call fails.
+   */
+  async triggerHealthCheck(): Promise<boolean> {
+    const isAvailable = await this.checkBrokerAvailability();
+    if (!isAvailable && this.isConnected) {
+      this.isConnected = false;
+      this.logger.warn(
+        "Kafka Producer status updated to disconnected after health check",
+      );
+      this.startWatchdog();
+    }
+    return isAvailable;
   }
 }

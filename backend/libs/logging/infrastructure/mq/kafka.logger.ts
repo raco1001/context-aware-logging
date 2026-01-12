@@ -1,12 +1,18 @@
 import { Injectable, Logger, Optional, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { LoggerPort } from "@logging/out-ports";
-import { WideEvent } from "@logging/domain";
-import { LoggingContext } from "@logging/domain";
+import { WideEvent, LoggingContext } from "@logging/domain";
+import { LoggingMode } from "../../core/domain/logging-mode.enum";
 import { MqProducerPort } from "@logging/out-ports";
+import { LoggingModeService } from "@logging/service";
 
 /**
  * KafkaLogger - LoggerPort wrapper that publishes to Kafka instead of directly logging.
+ *
+ * Core Philosophy:
+ * - The status machine (LoggingModeService) determines the logging mode.
+ * - KAFKA MODE: Asynchronous logging via Kafka Producer
+ * - DIRECT MODE: Direct logging to MongoDB (Fallback if Kafka fails)
  *
  * This adapter decouples logging from application performance by:
  * 1. Publishing events to Kafka (non-blocking)
@@ -23,6 +29,7 @@ export class KafkaLogger extends LoggerPort {
   constructor(
     private readonly mqProducer: MqProducerPort,
     @Optional() @Inject(LoggerPort) fallbackLogger: LoggerPort | undefined,
+    private readonly loggingModeService: LoggingModeService,
     private readonly configService: ConfigService,
   ) {
     super();
@@ -41,7 +48,7 @@ export class KafkaLogger extends LoggerPort {
     _metadata: LoggingContext["_metadata"],
     _summary: string,
   ): Promise<void> {
-    // If MQ is disabled, use fallback logger directly
+    // If MQ is disabled, use the fallback logger
     if (!this.mqEnabled) {
       if (this.fallbackLogger) {
         return this.fallbackLogger.log(event, _metadata, _summary);
@@ -52,15 +59,43 @@ export class KafkaLogger extends LoggerPort {
       return;
     }
 
+    // Check the status machine
+    const mode = this.loggingModeService.getMode();
+
+    if (mode === LoggingMode.DIRECT) {
+      // DIRECT MODE: Use the fallback logger immediately
+      if (this.fallbackLogger) {
+        return this.fallbackLogger.log(event, _metadata, _summary);
+      }
+      this.logger.warn("DIRECT mode but no fallback logger. Log lost.");
+      return;
+    }
+
+    // KAFKA MODE: Try to use the producer
+    if (!this.mqProducer.isConnected()) {
+      // If the producer is not connected, change the mode
+      this.logger.warn("Producer not connected. Switching to DIRECT mode...");
+      this.loggingModeService.setMode(LoggingMode.DIRECT);
+
+      if (this.fallbackLogger) {
+        return this.fallbackLogger.log(event, _metadata, _summary);
+      }
+      this.logger.warn(
+        "MQ producer not connected and no fallback logger available. Log lost.",
+      );
+      return;
+    }
+
     try {
-      // Publish to MQ (non-blocking)
       await this.mqProducer.publish(event, _metadata, _summary);
     } catch (error) {
       this.logger.warn(
-        `MQ publish failed, falling back to direct logging: ${error.message}`,
+        `MQ publish failed: ${error.message}. Switching to DIRECT mode...`,
       );
 
-      // Fallback to direct logging
+      // If failed, change the mode
+      this.loggingModeService.setMode(LoggingMode.DIRECT);
+
       if (this.fallbackLogger) {
         try {
           await this.fallbackLogger.log(event, _metadata, _summary);

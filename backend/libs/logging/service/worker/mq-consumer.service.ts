@@ -7,8 +7,9 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Consumer } from "kafkajs";
 import { MongoLogger, KafkaConsumerClient } from "@logging/infrastructure";
-import { WideEvent } from "@logging/domain";
-import { LoggingContext } from "@logging/domain";
+import { WideEvent, LoggingContext } from "@logging/domain";
+import { LoggingMode } from "../../core/domain/logging-mode.enum";
+import { LoggingModeService } from "../logging-mode.service";
 
 interface LogMessage {
   event: WideEvent;
@@ -21,26 +22,35 @@ interface LogMessage {
  * MqConsumerService - Background worker that consumes log events from MQ
  * and persists them to MongoDB via MongoLogger.
  *
+ * 핵심 철학:
+ * - Consumer는 "ephemeral worker"로 취급됩니다.
+ * - Kafka가 정상일 때만 Consumer 인스턴스를 생성합니다.
+ * - Kafka 장애 시 Consumer 인스턴스를 완전히 파괴합니다.
+ * - Watchdog은 Consumer를 건드리지 않고 브로커 가용성만 확인합니다.
+ *
  * Features:
  * - Batch processing (100 events or 1 second timeout)
- * - Error handling with retry logic
- * - Graceful shutdown
+ * - Error handling with graceful degradation
+ * - State machine-based lifecycle management
  */
 @Injectable()
 export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MqConsumerService.name);
-  private consumer: Consumer;
+  private consumer: Consumer | null = null; // 🔥 null로 초기화
   private readonly topic: string;
   private readonly batchSize: number;
   private readonly batchTimeoutMs: number;
   private isRunning = false;
   private batch: LogMessage[] = [];
   private batchTimeout: NodeJS.Timeout | null = null;
+  private watchdogTimer: NodeJS.Timeout | null = null;
+  private consecutiveSuccessCount = 0;
+  private readonly STABILITY_THRESHOLD = 3;
 
   constructor(
-    // Though KafkaConsumerClient and MongoLogger are currently used, it could be any MqConsumerPort implementation in the future
     private readonly ConsumerClient: KafkaConsumerClient,
     private readonly mongoLogger: MongoLogger,
+    private readonly loggingModeService: LoggingModeService, // 🔥 상태 머신 주입
     private readonly configService: ConfigService,
   ) {
     this.topic = this.configService.get<string>("MQ_LOG_TOPIC") || "log-events";
@@ -52,116 +62,188 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<string>("MQ_BATCH_TIMEOUT_MS") || "1000",
       10,
     );
+
+    // 🔥 상태 변경 감지 - 모드가 변경되면 Consumer를 생성/파괴
+    this.loggingModeService.onModeChange((mode) => {
+      if (mode === LoggingMode.DIRECT) {
+        this.logger.log("Mode changed to DIRECT. Destroying consumer...");
+        this.destroyConsumer();
+      } else if (mode === LoggingMode.KAFKA) {
+        this.logger.log("Mode changed to KAFKA. Starting consumer...");
+        this.startConsumer();
+      }
+    });
   }
 
   async onModuleInit(): Promise<void> {
-    await this.start();
+    // 초기 모드에 따라 Consumer 시작
+    if (this.loggingModeService.getMode() === LoggingMode.KAFKA) {
+      await this.startConsumer();
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.stop();
+    await this.destroyConsumer();
+    this.stopWatchdog();
   }
 
-  private async start(): Promise<void> {
-    if (this.isRunning) {
+  /**
+   * Consumer를 생성하고 시작합니다.
+   * Kafka가 정상일 때만 호출됩니다.
+   */
+  private async startConsumer(): Promise<void> {
+    if (this.consumer) {
+      this.logger.debug("Consumer already exists, skipping...");
       return;
     }
 
     try {
-      await this.ConsumerClient.connect();
-      this.consumer = this.ConsumerClient.getConsumer();
+      // 🔥 Consumer 인스턴스 생성
+      this.consumer = await this.ConsumerClient.createAndConnect();
 
       await this.consumer.subscribe({
         topic: this.topic,
         fromBeginning: false,
       });
+
       this.isRunning = true;
+      this.stopWatchdog();
 
       this.logger.log(
         `Started MQ consumer for topic: ${this.topic}, group: ${this.ConsumerClient.getGroupId()}`,
       );
 
+      // 🔥 consume() 실행
       this.consume().catch((error) => {
         this.logger.error(
-          `MQ Consumer runtime error: ${error.message}`,
+          `Consumer runtime error: ${error.message}`,
           error.stack,
         );
-        this.isRunning = false;
+        this.handleConsumerFailure();
       });
     } catch (error) {
       this.logger.error(
-        `Failed to start MQ consumer: ${error.message}`,
+        `Failed to start consumer: ${error.message}`,
         error.stack,
       );
-      throw error;
+      this.handleConsumerFailure();
     }
   }
 
-  private async stop(): Promise<void> {
-    if (!this.isRunning) {
+  /**
+   * Consumer를 완전히 파괴합니다.
+   * disconnect() 후 반드시 null로 설정하여 GC 대상으로 만듭니다.
+   */
+  private async destroyConsumer(): Promise<void> {
+    if (!this.consumer) {
       return;
     }
 
     this.isRunning = false;
-    this.logger.log("Graceful shutdown initiated: Stopping MQ consumer...");
 
     try {
-      // 1. Stop fetching new messages first to prevent batch from growing
-      // Use a timeout for safety
-      if (this.consumer) {
-        this.logger.log("Stopping consumer fetcher...");
-        await Promise.race([
-          this.consumer.stop(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Consumer stop timeout")), 5000),
-          ),
-        ]).catch((err) =>
-          this.logger.warn(`Consumer stop failed or timed out: ${err.message}`),
-        );
-      }
-
-      // 2. Clear timeout immediately to avoid redundant batch processing
-      if (this.batchTimeout) {
-        clearTimeout(this.batchTimeout);
-        this.batchTimeout = null;
-      }
-
-      // 3. Process remaining batch before shutdown with timeout
+      // 배치 처리 중이면 완료 대기
       if (this.batch.length > 0) {
         this.logger.log(
-          `Processing final batch of ${this.batch.length} events before shutdown`,
+          `Processing final batch of ${this.batch.length} events before destroying consumer...`,
         );
-        const batchToProcess = [...this.batch];
-        this.batch = [];
-
-        await Promise.race([
-          this.processBatch(batchToProcess),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Final batch processing timeout")),
-              5000,
-            ),
-          ),
-        ]).catch((err) =>
-          this.logger.warn(
-            `Final batch processing failed or timed out: ${err.message}`,
-          ),
-        );
+        await this.flushBatch();
       }
 
-      // 4. Finally disconnect from Kafka
-      this.logger.log("Disconnecting from Kafka...");
-      await this.ConsumerClient.disconnect();
-      this.logger.log("MQ consumer stopped successfully");
+      // Consumer 중지
+      if (this.consumer) {
+        await this.consumer.stop();
+      }
     } catch (error) {
-      this.logger.error(
-        `Error during MQ consumer graceful shutdown: ${error.message}`,
-        error.stack,
-      );
+      this.logger.warn(`Error stopping consumer: ${error.message}`);
+    }
+
+    // 🔥 ConsumerClient를 통해 완전 파괴
+    await this.ConsumerClient.destroy();
+    this.consumer = null; // 🔥 null로 설정
+
+    // 배치 타이머 정리
+    if (this.batchTimeout) {
+      clearTimeout(this.batchTimeout);
+      this.batchTimeout = null;
+    }
+
+    this.logger.log("Consumer destroyed");
+  }
+
+  /**
+   * Consumer 실패 시 처리
+   * 상태를 DIRECT로 변경하여 Consumer 파괴를 트리거합니다.
+   */
+  private handleConsumerFailure(): void {
+    this.logger.warn(
+      "Consumer failure detected. Switching to DIRECT mode and starting watchdog.",
+    );
+
+    // 상태를 DIRECT로 변경 (이것이 Consumer 파괴를 트리거함)
+    this.loggingModeService.setMode(LoggingMode.DIRECT);
+
+    // Watchdog 시작
+    this.startWatchdog();
+  }
+
+  /**
+   * Watchdog: Kafka 브로커 가용성만 확인
+   * Consumer를 절대 건드리지 않습니다.
+   */
+  private startWatchdog(): void {
+    if (this.watchdogTimer) {
+      return;
+    }
+
+    this.consecutiveSuccessCount = 0;
+    this.logger.log(
+      "Watchdog started. Monitoring Kafka broker availability...",
+    );
+
+    this.watchdogTimer = setInterval(async () => {
+      try {
+        const isAvailable = await this.ConsumerClient.checkBrokerAvailability();
+
+        if (isAvailable) {
+          this.consecutiveSuccessCount++;
+          this.logger.debug(
+            `Watchdog: Kafka available (${this.consecutiveSuccessCount}/${this.STABILITY_THRESHOLD})`,
+          );
+
+          if (this.consecutiveSuccessCount >= this.STABILITY_THRESHOLD) {
+            this.logger.log(
+              "Watchdog: Kafka is stable. Switching to KAFKA mode...",
+            );
+            this.consecutiveSuccessCount = 0;
+            this.stopWatchdog();
+
+            // 🔥 상태 변경만 하면 됨 - onModeChange 콜백이 Consumer를 생성함
+            this.loggingModeService.setMode(LoggingMode.KAFKA);
+          }
+        } else {
+          this.consecutiveSuccessCount = 0;
+          this.logger.debug("Watchdog: Kafka still offline.");
+        }
+      } catch (error) {
+        this.consecutiveSuccessCount = 0;
+        this.logger.debug(`Watchdog error: ${error.message}`);
+      }
+    }, 60000); // 1분마다 체크
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
     }
   }
 
   private async consume(): Promise<void> {
+    if (!this.consumer) {
+      throw new Error("Consumer instance does not exist");
+    }
+
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
         try {
@@ -187,7 +269,16 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
           );
         }
       },
-    });
+      // Disable KafkaJS auto-restart - we handle recovery via state machine
+      restartOnFailure: async (error) => {
+        this.logger.warn(
+          `Consumer error: ${error.message}. Disabling KafkaJS auto-restart.`,
+        );
+        // 🔥 false 반환하여 KafkaJS 자동 재시작 비활성화
+        // 상태 머신이 Consumer 파괴 및 복구를 관리합니다.
+        return false;
+      },
+    } as any); // Type assertion: restartOnFailure is supported in KafkaJS but may not be in TypeScript types yet
   }
 
   private scheduleBatchFlush(): void {

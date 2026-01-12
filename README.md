@@ -79,14 +79,7 @@ This project is built across 5 distinct phases. You can experience the system's 
 
 ### Phase 1: Wide Event Logging (Local JSON)
 
-```mermaid
-graph LR
-    A[HTTP Request] --> B[LoggingInterceptor]
-    B --> C[ContextService<br/>AsyncLocalStorage]
-    C --> D[LoggingService]
-    D --> E[FileLoggerAdapter]
-    E --> F[(app.log<br/>JSON Lines)]
-```
+![Phase 1 Architecture](./docs/images/phase1.png)
 
 Observe how a single request is captured as a context-rich JSON "Wide Event".
 
@@ -118,14 +111,7 @@ Observe how a single request is captured as a context-rich JSON "Wide Event".
 
 ### Phase 2: MongoDB Persistence & Querying
 
-```mermaid
-graph LR
-    A[HTTP Request] --> B[LoggingInterceptor]
-    B --> C[LoggingService]
-    C --> D[MongoLoggerAdapter]
-    D --> E[(MongoDB<br/>Time-series)]
-    E --> F[Statistical Aggregation]
-```
+![Phase2 Architecture](./docs/images/phase2.png)
 
 Transition from local file logs to a queryable MongoDB Time-series collection.
 
@@ -153,14 +139,7 @@ Transition from local file logs to a queryable MongoDB Time-series collection.
 
 ### Phase 3: RAG-based Semantic Storage (Vector DB)
 
-```mermaid
-graph TD
-    A[(MongoDB<br/>wide_events)] --> B[EmbeddingUseCase]
-    B --> C{Deterministic<br/>Summary}
-    C --> D[Voyage AI SDK]
-    D --> E[Vector Embedding]
-    E --> F[(MongoDB Atlas<br/>Vector Search)]
-```
+![Phase3 Architecture](./docs/images/phase3.png)
 
 Summarize and vectorize log data for semantic search capabilities.
 
@@ -194,16 +173,7 @@ Summarize and vectorize log data for semantic search capabilities.
 
 ### Phase 4: Intelligent Log Analysis (RAG Search)
 
-```mermaid
-graph TD
-    A[NL Query] --> B[SearchService]
-    B --> C[QueryPreprocessor]
-    C --> D[Vector Search]
-    D --> E[Voyage Rerank]
-    E --> F[Grounding Pack]
-    F --> G[Gemini Synthesis]
-    G --> H[Evidence-based Answer]
-```
+![Phase4 Architecture](./docs/images/phase4.png)
 
 Query your logs using natural language and receive AI-driven insights.
 
@@ -255,21 +225,7 @@ Query your logs using natural language and receive AI-driven insights.
 
 ### Phase 5: Production Hardening
 
-```mermaid
-graph TD
-    subgraph "Asynchronous Logging"
-    L1[Request] --> L2[SamplingPolicy]
-    L2 -- "Sampled" --> L3[KafkaLoggerAdapter]
-    L3 --> L4[[Kafka]]
-    L4 --> L5[MQ Consumer]
-    L5 --> L6[(MongoDB)]
-    end
-
-    subgraph "Distributed Caching"
-    C1[Search Query] --> C2[SearchService]
-    C2 <--> C3[(Redis)]
-    end
-```
+![Phase5 Architecture](./docs/images/phase5.png)
 
 Enhance system resilience using Kafka for decoupling, Redis for caching, and sampling strategies.
 

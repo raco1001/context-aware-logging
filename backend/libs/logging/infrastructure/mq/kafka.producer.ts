@@ -32,6 +32,10 @@ export class KafkaProducer extends MqProducerPort {
     }
   }
 
+  isConnected(): boolean {
+    return this.kafkaProducerClient.isProducerConnected();
+  }
+
   async disconnect(): Promise<void> {
     await this.kafkaProducerClient.disconnect();
   }
@@ -58,7 +62,7 @@ export class KafkaProducer extends MqProducerPort {
         topic: this.topic,
         messages: [
           {
-            key: event.requestId, // Use requestId as key for partitioning
+            key: event.requestId,
             value: JSON.stringify(message),
           },
         ],
@@ -72,6 +76,9 @@ export class KafkaProducer extends MqProducerPort {
         `Failed to publish log event to Kafka: ${error.message}`,
         error.stack,
       );
+
+      this.kafkaProducerClient.triggerHealthCheck();
+
       throw error;
     }
   }
