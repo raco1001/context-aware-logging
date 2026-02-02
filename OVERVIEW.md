@@ -132,7 +132,7 @@ We verified the system through **Operational Scenarios** rather than just unit t
 
 ## G. Documentation
 
-For detailed design and implementation notes for each phase, please refer to the [docs/](docs/) directory.
+For detailed design and implementation notes for each phase, please refer to the [docs/en](docs/en) directory.
 
 ---
 
