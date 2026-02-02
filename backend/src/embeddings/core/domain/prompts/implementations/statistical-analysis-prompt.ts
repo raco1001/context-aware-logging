@@ -1,6 +1,6 @@
-import { PromptTemplate } from "../prompt-template";
-import { PromptTemplateRegistry } from "../prompt-template-registry";
-import { QueryMetadata } from "@embeddings/dtos";
+import { PromptTemplate } from '../prompt-template';
+import { PromptTemplateRegistry } from '../prompt-template-registry';
+import { QueryMetadata } from '@embeddings/dtos';
 
 export class StatisticalAnalysisPrompt extends PromptTemplate {
   constructor(private readonly registry: PromptTemplateRegistry) {
@@ -8,7 +8,7 @@ export class StatisticalAnalysisPrompt extends PromptTemplate {
   }
 
   getType(): string {
-    return "statistical-analysis";
+    return 'statistical-analysis';
   }
 
   build(params: {
@@ -16,12 +16,12 @@ export class StatisticalAnalysisPrompt extends PromptTemplate {
     currentTime?: Date;
     initialMetadata?: QueryMetadata;
   }): string {
-    const template = this.registry.getTemplateString(this.getType()) || "";
+    const template = this.registry.getTemplateString(this.getType()) || '';
     const currentTime = params.currentTime || new Date();
 
     let result = template
-      .replace("{{currentTime}}", currentTime.toISOString())
-      .replace("{{query}}", params.query);
+      .replace('{{currentTime}}', currentTime.toISOString())
+      .replace('{{query}}', params.query);
 
     if (params.initialMetadata) {
       const metadataJson = JSON.stringify(
@@ -36,9 +36,9 @@ export class StatisticalAnalysisPrompt extends PromptTemplate {
         null,
         2,
       );
-      result = result.replace("{{initialMetadata}}", metadataJson);
+      result = result.replace('{{initialMetadata}}', metadataJson);
     } else {
-      result = result.replace("{{initialMetadata}}", "null");
+      result = result.replace('{{initialMetadata}}', 'null');
     }
 
     return result;

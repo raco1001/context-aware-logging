@@ -1,9 +1,9 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { EmbeddingUseCase } from "@embeddings/in-ports";
-import { EmbeddingPort, LogStoragePort } from "@embeddings/out-ports";
-import { chunkByFields, shouldChunk, Chunk } from "../core/utils/chunking.util";
-import { SummaryEnrichmentService } from "./sub-services/summary-enrichment.service";
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EmbeddingUseCase } from '@embeddings/in-ports';
+import { EmbeddingPort, LogStoragePort } from '@embeddings/out-ports';
+import { chunkByFields, shouldChunk, Chunk } from '../core/utils/chunking.util';
+import { SummaryEnrichmentService } from './sub-services/summary-enrichment.service';
 
 /**
  * EmbeddingService - Service for embedding operations.
@@ -22,7 +22,7 @@ export class EmbeddingService extends EmbeddingUseCase {
   ) {
     super();
     this.batchChunkSize = parseInt(
-      this.configService.get<string>("EMBEDDING_BATCH_CHUNK_SIZE") || "50",
+      this.configService.get<string>('EMBEDDING_BATCH_CHUNK_SIZE') || '50',
       10,
     );
   }
@@ -34,7 +34,7 @@ export class EmbeddingService extends EmbeddingUseCase {
    * @throws An error if the batch processing fails.
    */
   async processPendingLogs(limit: number): Promise<number> {
-    const source = "wide_events";
+    const source = 'wide_events';
     this.logger.log(
       `Starting High-Watermark embedding process (Source: ${source}, Limit: ${limit}, Chunk Size: ${this.batchChunkSize})`,
     );
@@ -48,7 +48,7 @@ export class EmbeddingService extends EmbeddingUseCase {
     );
 
     if (logsToEmbed.length === 0) {
-      this.logger.log("No new logs found for embedding after watermark.");
+      this.logger.log('No new logs found for embedding after watermark.');
       return 0;
     }
 

@@ -27,6 +27,6 @@ export abstract class PromptTemplate {
    * Can be used for version management in Phase 5.
    */
   getVersion(): string {
-    return "1.0.0";
+    return '1.0.0';
   }
 }

@@ -1,14 +1,14 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { QueryMetadata } from "@embeddings/dtos";
+import { Injectable, Logger } from '@nestjs/common';
+import { QueryMetadata } from '@embeddings/dtos';
 import {
   USER_ROLES_KEYWORDS,
   OUTCOME_KEYWORDS,
   LATENCY_KEYWORDS,
-} from "@embeddings/value-objects/filter";
+} from '@embeddings/value-objects/filter';
 import {
   ROUTE_PATTERN_CONSTANTS,
   SERVICE_MAP_CONSTANTS,
-} from "@embeddings/value-objects/constants";
+} from '@embeddings/value-objects/constants';
 /**
  * QueryPreprocessor - Transforms natural language queries into structured format
  * that matches the _summary format used for log embeddings.
@@ -42,7 +42,7 @@ export class QueryPreprocessorService {
     const parts: string[] = [];
 
     const outcome = this.determineOutcome(query, metadata);
-    if (outcome !== "ANY") {
+    if (outcome !== 'ANY') {
       parts.push(`Outcome: ${outcome}`);
     }
 
@@ -57,7 +57,7 @@ export class QueryPreprocessorService {
     }
 
     if (metadata.hasError || metadata.errorCode) {
-      parts.push(`Error: ${metadata.errorCode || "ANY"}`);
+      parts.push(`Error: ${metadata.errorCode || 'ANY'}`);
       parts.push(`ErrorMessage: ANY`);
     }
 
@@ -71,7 +71,7 @@ export class QueryPreprocessorService {
       parts.push(`LatencyBucket: ${latencyBucket}`);
     }
 
-    const structuredQuery = query.trim().concat(`\n\n${parts.join(", ")}`);
+    const structuredQuery = query.trim().concat(`\n\n${parts.join(', ')}`);
     this.logger.debug(`Structured query: "${structuredQuery}"`);
     return structuredQuery;
   }
@@ -83,31 +83,31 @@ export class QueryPreprocessorService {
     const lowerQuery = query.toLowerCase();
 
     if (metadata.hasError || metadata.errorCode) {
-      return "FAILED";
+      return 'FAILED';
     }
 
     if (
       OUTCOME_KEYWORDS.FAILED.some((keyword) => lowerQuery.includes(keyword))
     ) {
-      return "FAILED";
+      return 'FAILED';
     }
     if (
       OUTCOME_KEYWORDS.SUCCESS.some((keyword) => lowerQuery.includes(keyword))
     ) {
-      return "SUCCESS";
+      return 'SUCCESS';
     }
     if (
       OUTCOME_KEYWORDS.WARNING.some((keyword) => lowerQuery.includes(keyword))
     ) {
-      return "WARNING";
+      return 'WARNING';
     }
     if (
       OUTCOME_KEYWORDS.EDGE_CASE.some((keyword) => lowerQuery.includes(keyword))
     ) {
-      return "EDGE_CASE";
+      return 'EDGE_CASE';
     }
 
-    return "ANY";
+    return 'ANY';
   }
 
   /**

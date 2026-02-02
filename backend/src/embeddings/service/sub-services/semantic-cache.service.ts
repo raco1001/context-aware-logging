@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
-import { QueryMetadata } from "@embeddings/dtos";
-import * as crypto from "crypto";
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { QueryMetadata } from '@embeddings/dtos';
+import * as crypto from 'crypto';
 
 /**
  * Cached vector search result.
@@ -56,7 +56,7 @@ export class SemanticCacheService implements OnModuleDestroy {
     const candidates = this.findCandidatesByMetadata(cacheKey);
 
     if (candidates.length === 0) {
-      this.logger.debug("No cache candidates found for metadata");
+      this.logger.debug('No cache candidates found for metadata');
       return [];
     }
 
@@ -176,13 +176,13 @@ export class SemanticCacheService implements OnModuleDestroy {
 
     const metadataJson = JSON.stringify(normalized);
     const metadataHash = crypto
-      .createHash("sha256")
+      .createHash('sha256')
       .update(metadataJson)
-      .digest("hex");
+      .digest('hex');
 
     // For quick embedding lookup, create a hash of normalized embedding
     // (we'll use the first few dimensions for quick comparison)
-    const embeddingHash = ""; // Not used in current implementation
+    const embeddingHash = ''; // Not used in current implementation
 
     return { metadataHash, embeddingHash };
   }
@@ -349,6 +349,6 @@ export class SemanticCacheService implements OnModuleDestroy {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
-    this.logger.log("SemanticCacheService destroyed");
+    this.logger.log('SemanticCacheService destroyed');
   }
 }

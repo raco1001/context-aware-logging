@@ -1,6 +1,6 @@
-import { PromptTemplate } from "../prompt-template";
-import { PromptTemplateRegistry } from "../prompt-template-registry";
-import { GROUNDING_VERIFICATION_FALLBACK } from "@embeddings/value-objects/fallbacks/prompts";
+import { PromptTemplate } from '../prompt-template';
+import { PromptTemplateRegistry } from '../prompt-template-registry';
+import { GROUNDING_VERIFICATION_FALLBACK } from '@embeddings/value-objects/fallbacks/prompts';
 
 /**
  * GroundingVerificationPrompt - Grounding verification prompt template
@@ -16,7 +16,7 @@ export class GroundingVerificationPrompt extends PromptTemplate {
   }
 
   getType(): string {
-    return "grounding-verification";
+    return 'grounding-verification';
   }
 
   build(params: {
@@ -28,9 +28,9 @@ export class GroundingVerificationPrompt extends PromptTemplate {
       this.registry.getTemplateString(this.getType()) || this.fallbackTemplate;
 
     return template
-      .replace("{{query}}", params.query)
-      .replace("{{answer}}", params.answer)
-      .replace("{{groundingContext}}", params.groundingContext);
+      .replace('{{query}}', params.query)
+      .replace('{{answer}}', params.answer)
+      .replace('{{groundingContext}}', params.groundingContext);
   }
 
   /**
@@ -38,11 +38,11 @@ export class GroundingVerificationPrompt extends PromptTemplate {
    */
   static formatGroundingContext(contexts: any[]): string {
     if (!contexts || contexts.length === 0) {
-      return "No grounding context provided.";
+      return 'No grounding context provided.';
     }
 
     return contexts
       .map((ctx, i) => `[Log ${i + 1}]\n${JSON.stringify(ctx, null, 2)}`)
-      .join("\n\n");
+      .join('\n\n');
   }
 }

@@ -1,5 +1,5 @@
-import { QueryMetadata } from "@embeddings/dtos";
-import { AnalysisResult } from "@embeddings/dtos";
+import { QueryMetadata } from '@embeddings/dtos';
+import { AnalysisResult } from '@embeddings/dtos';
 
 export abstract class SynthesisPort {
   /**
@@ -14,7 +14,7 @@ export abstract class SynthesisPort {
     query: string,
     contexts: any[],
     history?: any[],
-    targetLanguage?: "Korean" | "English",
+    targetLanguage?: 'Korean' | 'English',
   ): Promise<{ answer: string; confidence: number }>;
 
   /**
@@ -65,10 +65,10 @@ export abstract class SynthesisPort {
     answer: string,
     groundingContext: any[],
   ): Promise<{
-    status: "VERIFIED" | "PARTIALLY_VERIFIED" | "NOT_VERIFIED";
+    status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'NOT_VERIFIED';
     confidenceAdjustment: number;
     unverifiedClaims: string[];
-    action: "KEEP_ANSWER" | "ADJUST_CONFIDENCE" | "REJECT_ANSWER";
+    action: 'KEEP_ANSWER' | 'ADJUST_CONFIDENCE' | 'REJECT_ANSWER';
     reasoning: string;
   }>;
 
@@ -86,5 +86,5 @@ export abstract class SynthesisPort {
    * @param text The text to detect language for
    * @returns "Korean" or "English"
    */
-  abstract detectLanguage(text: string): "Korean" | "English";
+  abstract detectLanguage(text: string): 'Korean' | 'English';
 }

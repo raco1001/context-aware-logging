@@ -1,7 +1,7 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { LogStoragePort } from "@embeddings/out-ports";
-import { QueryMetadata } from "@embeddings/dtos";
-import { METRIC_TEMPLATES } from "@embeddings/value-objects/constants";
+import { Injectable, Logger } from '@nestjs/common';
+import { LogStoragePort } from '@embeddings/out-ports';
+import { QueryMetadata } from '@embeddings/dtos';
+import { METRIC_TEMPLATES } from '@embeddings/value-objects/constants';
 
 /**
  * AggregationService - Handles statistical aggregations on log data.
@@ -41,7 +41,7 @@ export class AggregationService {
     try {
       const results = await this.logStoragePort.executeAggregation(
         pipeline,
-        "wide_events",
+        'wide_events',
       );
       this.logger.log(
         `Template execution completed: ${results.length} results found`,
@@ -63,7 +63,7 @@ export class AggregationService {
     metadata: QueryMetadata,
     topN: number = 5,
   ): Promise<any[]> {
-    return this.executeTemplate("TOP_ERROR_CODES", { metadata, topN });
+    return this.executeTemplate('TOP_ERROR_CODES', { metadata, topN });
   }
 
   /**
@@ -73,7 +73,7 @@ export class AggregationService {
     metadata: QueryMetadata,
     topN: number = 5,
   ): Promise<any[]> {
-    return this.executeTemplate("ERROR_DISTRIBUTION_BY_ROUTE", {
+    return this.executeTemplate('ERROR_DISTRIBUTION_BY_ROUTE', {
       metadata,
       topN,
     });
@@ -83,6 +83,6 @@ export class AggregationService {
    * Aggregates errors by service, returning error counts per service.
    */
   async aggregateErrorsByService(metadata: QueryMetadata): Promise<any[]> {
-    return this.executeTemplate("ERROR_BY_SERVICE", { metadata });
+    return this.executeTemplate('ERROR_BY_SERVICE', { metadata });
   }
 }

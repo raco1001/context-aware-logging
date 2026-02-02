@@ -1,7 +1,7 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { SessionCachePort } from "@embeddings/out-ports";
-import { SessionCacheDto } from "@embeddings/dtos";
-import { RedisClient } from "./redis.client";
+import { Injectable, Logger } from '@nestjs/common';
+import { SessionCachePort } from '@embeddings/out-ports';
+import { SessionCacheDto } from '@embeddings/dtos';
+import { RedisClient } from './redis.client';
 
 /**
  * Serializable version of SessionCacheDto for Redis storage.
@@ -27,7 +27,7 @@ interface SerializedSessionCacheDto {
 @Injectable()
 export class SessionRedisAdapter extends SessionCachePort {
   private readonly logger = new Logger(SessionRedisAdapter.name);
-  private readonly keyPrefix = "session:";
+  private readonly keyPrefix = 'session:';
 
   constructor(private readonly redisClient: RedisClient) {
     super();
@@ -87,7 +87,7 @@ export class SessionRedisAdapter extends SessionCachePort {
       const entries: [string, SessionCacheDto][] = [];
 
       for (const key of keys) {
-        const sessionId = key.replace(this.keyPrefix, "");
+        const sessionId = key.replace(this.keyPrefix, '');
         const data = await this.get(sessionId);
         if (data) {
           entries.push([sessionId, data]);
@@ -124,7 +124,7 @@ export class SessionRedisAdapter extends SessionCachePort {
   async cleanupExpiredSessions(): Promise<number> {
     // Redis TTL automatically handles expiration
     // No manual cleanup needed
-    this.logger.debug("Redis handles TTL-based expiration automatically");
+    this.logger.debug('Redis handles TTL-based expiration automatically');
     return 0;
   }
 
@@ -134,16 +134,16 @@ export class SessionRedisAdapter extends SessionCachePort {
    */
   private async scanKeys(): Promise<string[]> {
     const keys: string[] = [];
-    let cursor = "0";
+    let cursor = '0';
 
     do {
       const result = await this.client.scan(cursor, {
-        MATCH: this.keyPrefix + "*",
+        MATCH: this.keyPrefix + '*',
         COUNT: 100,
       });
       cursor = String(result.cursor);
       keys.push(...result.keys);
-    } while (cursor !== "0");
+    } while (cursor !== '0');
 
     return keys;
   }

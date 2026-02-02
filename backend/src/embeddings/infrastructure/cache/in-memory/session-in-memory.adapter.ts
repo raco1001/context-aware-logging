@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
-import { SessionCachePort } from "@embeddings/out-ports";
-import { SessionCacheDto } from "@embeddings/dtos";
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { SessionCachePort } from '@embeddings/out-ports';
+import { SessionCacheDto } from '@embeddings/dtos';
 
 /**
  * InMemoryAdapter - In-memory implementation of SessionCachePort.
@@ -99,6 +99,6 @@ export class SessionInMemoryAdapter
       this.cleanupInterval = null;
     }
     this.cache.clear();
-    this.logger.log("SessionInMemoryAdapter destroyed");
+    this.logger.log('SessionInMemoryAdapter destroyed');
   }
 }

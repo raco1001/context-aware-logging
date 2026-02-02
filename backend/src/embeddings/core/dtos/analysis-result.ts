@@ -1,4 +1,4 @@
-import { AnalysisIntent } from "@embeddings/value-objects/filter";
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
 export interface AnalysisResult {
   sessionId?: string;
   question: string;

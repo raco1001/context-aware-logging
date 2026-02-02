@@ -1,10 +1,10 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { LogStoragePort, Watermark } from "@embeddings/out-ports";
-import { LogEmbeddingEntity } from "@embeddings/domain";
-import { MongoEmbeddingClient } from "./mongo.client";
-import { EmbeddingStatus } from "@logging/value-objects";
-import { QueryMetadata } from "@embeddings/dtos";
-import { WideEvent } from "@logging/domain";
+import { Injectable, Logger } from '@nestjs/common';
+import { LogStoragePort, Watermark } from '@embeddings/out-ports';
+import { LogEmbeddingEntity } from '@embeddings/domain';
+import { MongoEmbeddingClient } from './mongo.client';
+import { EmbeddingStatus } from '@logging/value-objects';
+import { QueryMetadata } from '@embeddings/dtos';
+import { WideEvent } from '@logging/domain';
 
 /**
  * MongoLogStorageAdapter - Infrastructure layer implementation of LogStoragePort.
@@ -13,9 +13,9 @@ import { WideEvent } from "@logging/domain";
 @Injectable()
 export class MongoLogStorageAdapter extends LogStoragePort {
   private readonly logger = new Logger(MongoLogStorageAdapter.name);
-  private readonly logsCollection = "wide_events";
-  private readonly progressCollection = "embedding_progress";
-  private readonly embeddedCollection = "wide_events_embedded";
+  private readonly logsCollection = 'wide_events';
+  private readonly progressCollection = 'embedding_progress';
+  private readonly embeddedCollection = 'wide_events_embedded';
 
   constructor(private readonly client: MongoEmbeddingClient) {
     super();
@@ -55,7 +55,7 @@ export class MongoLogStorageAdapter extends LogStoragePort {
       const collection = this.client.getCollection(source);
 
       const query: any = {
-        _summary: { $exists: true, $ne: "" },
+        _summary: { $exists: true, $ne: '' },
       };
 
       if (watermark) {
@@ -208,8 +208,8 @@ export class MongoLogStorageAdapter extends LogStoragePort {
       }
 
       const vectorSearchStage: any = {
-        index: "embedding_index",
-        path: "embedding",
+        index: 'embedding_index',
+        path: 'embedding',
         queryVector: embedding,
         numCandidates: limit * 10,
         limit: limit,
@@ -219,7 +219,7 @@ export class MongoLogStorageAdapter extends LogStoragePort {
         vectorSearchStage.filter = filter;
         this.logger.debug(`Vector search filter: ${JSON.stringify(filter)}`);
       } else {
-        this.logger.debug("No filters applied to vector search");
+        this.logger.debug('No filters applied to vector search');
       }
 
       const pipeline = [
@@ -231,7 +231,7 @@ export class MongoLogStorageAdapter extends LogStoragePort {
             _id: 0,
             eventId: 1,
             summary: 1,
-            score: { $meta: "vectorSearchScore" },
+            score: { $meta: 'vectorSearchScore' },
           },
         },
       ];
@@ -241,9 +241,9 @@ export class MongoLogStorageAdapter extends LogStoragePort {
         results = await collection.aggregate(pipeline).toArray();
       } catch (error: any) {
         if (
-          error.message?.includes("index") ||
-          error.message?.includes("vectorSearch") ||
-          error.message?.includes("SearchIndex")
+          error.message?.includes('index') ||
+          error.message?.includes('vectorSearch') ||
+          error.message?.includes('SearchIndex')
         ) {
           this.logger.error(
             `Vector search failed: Search Index may not exist. Error: ${error.message}`,
@@ -311,7 +311,7 @@ export class MongoLogStorageAdapter extends LogStoragePort {
    */
   async executeAggregation(
     pipeline: any[],
-    collectionName: string = "wide_events",
+    collectionName: string = 'wide_events',
   ): Promise<any[]> {
     try {
       const collection = this.client.getCollection(collectionName);

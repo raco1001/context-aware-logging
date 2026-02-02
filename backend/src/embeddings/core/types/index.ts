@@ -1,1 +1,1 @@
-export * from "./metric-template.types";
+export * from './metric-template.types';

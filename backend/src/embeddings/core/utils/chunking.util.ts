@@ -38,9 +38,9 @@ export function chunkSummary(
   }
 
   // Split by comma and space to preserve semantic meaning
-  const parts = _summary.split(", ").filter((part) => part.trim().length > 0);
+  const parts = _summary.split(', ').filter((part) => part.trim().length > 0);
   const chunks: Chunk[] = [];
-  let currentChunk = "";
+  let currentChunk = '';
 
   for (const part of parts) {
     // If adding this part would exceed max length, start a new chunk
@@ -53,7 +53,7 @@ export function chunkSummary(
     } else {
       // Add to current chunk
       if (currentChunk.length > 0) {
-        currentChunk += ", " + part;
+        currentChunk += ', ' + part;
       } else {
         currentChunk = part;
       }
@@ -121,9 +121,9 @@ export function createOverlappingChunks(
  * ]
  */
 export function chunkByFields(_summary: string): Chunk[] {
-  const parts = _summary.split(", ").filter((part) => part.trim().length > 0);
+  const parts = _summary.split(', ').filter((part) => part.trim().length > 0);
   return parts.map((part) => {
-    const colonIndex = part.indexOf(":");
+    const colonIndex = part.indexOf(':');
     if (colonIndex > 0) {
       const field = part.substring(0, colonIndex).toLowerCase();
       return {

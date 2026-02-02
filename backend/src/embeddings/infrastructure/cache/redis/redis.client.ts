@@ -3,9 +3,9 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   Logger,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { createClient, RedisClientType } from "redis";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createClient, RedisClientType } from 'redis';
 
 /**
  * RedisClient - Infrastructure client for Redis connection management.
@@ -31,35 +31,35 @@ export class RedisClient implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     const cacheType =
-      this.configService.get<string>("SESSION_CACHE_TYPE") || "memory";
+      this.configService.get<string>('SESSION_CACHE_TYPE') || 'memory';
 
-    if (cacheType !== "redis") {
-      this.logger.log("Redis client skipped (SESSION_CACHE_TYPE is not redis)");
+    if (cacheType !== 'redis') {
+      this.logger.log('Redis client skipped (SESSION_CACHE_TYPE is not redis)');
       return;
     }
 
     this.enabled = true;
-    const host = this.configService.get<string>("REDIS_HOST") || "localhost";
-    const port = this.configService.get<number>("REDIS_PORT") || 6379;
+    const host = this.configService.get<string>('REDIS_HOST') || 'localhost';
+    const port = this.configService.get<number>('REDIS_PORT') || 6379;
     const url = `redis://${host}:${port}`;
 
     this.client = createClient({ url });
 
-    this.client.on("error", (err) => {
+    this.client.on('error', (err) => {
       this.logger.error(`Redis client error: ${err.message}`);
     });
 
-    this.client.on("connect", () => {
+    this.client.on('connect', () => {
       this.logger.log(`Redis client connected to ${host}:${port}`);
     });
 
-    this.client.on("reconnecting", () => {
-      this.logger.warn("Redis client reconnecting...");
+    this.client.on('reconnecting', () => {
+      this.logger.warn('Redis client reconnecting...');
     });
 
     try {
       await this.client.connect();
-      this.logger.log("Successfully connected to Redis for Embeddings module");
+      this.logger.log('Successfully connected to Redis for Embeddings module');
     } catch (error) {
       this.logger.error(`Failed to connect to Redis: ${error.message}`);
       throw error;
@@ -69,7 +69,7 @@ export class RedisClient implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     if (this.client) {
       await this.client.quit();
-      this.logger.log("Redis connection for Embeddings module closed");
+      this.logger.log('Redis connection for Embeddings module closed');
     }
   }
 
@@ -79,7 +79,7 @@ export class RedisClient implements OnModuleInit, OnModuleDestroy {
    */
   getClient(): RedisClientType {
     if (!this.client) {
-      throw new Error("Redis client not initialized");
+      throw new Error('Redis client not initialized');
     }
     return this.client;
   }

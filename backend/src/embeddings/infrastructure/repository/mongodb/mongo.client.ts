@@ -3,9 +3,9 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   Logger,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { MongoClient, Db, Collection, Document } from "mongodb";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { MongoClient, Db, Collection, Document } from 'mongodb';
 
 /**
  * MongoEmbeddingClient - MongoDB connection for the embeddings module.
@@ -20,10 +20,10 @@ export class MongoEmbeddingClient implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     const uri =
-      this.configService.get<string>("MONGODB_URI") ||
-      "mongodb://eventsAdmin:eventsAdmin@localhost:27016/wide_events?authSource=wide_events&directConnection=true";
+      this.configService.get<string>('MONGODB_URI') ||
+      'mongodb://eventsAdmin:eventsAdmin@localhost:27016/wide_events?authSource=wide_events&directConnection=true';
     if (!uri) {
-      throw new Error("MONGODB_URI is not defined in environment variables");
+      throw new Error('MONGODB_URI is not defined in environment variables');
     }
 
     try {
@@ -31,7 +31,7 @@ export class MongoEmbeddingClient implements OnModuleInit, OnModuleDestroy {
       await this.client.connect();
       this.db = this.client.db();
       this.logger.log(
-        "Successfully connected to MongoDB for Embeddings module",
+        'Successfully connected to MongoDB for Embeddings module',
       );
     } catch (error) {
       this.logger.error(`Failed to connect to MongoDB: ${error.message}`);
@@ -41,7 +41,7 @@ export class MongoEmbeddingClient implements OnModuleInit, OnModuleDestroy {
 
   getCollection<T extends Document = any>(name: string): Collection<T> {
     if (!this.db) {
-      throw new Error("Database connection not initialized");
+      throw new Error('Database connection not initialized');
     }
     return this.db.collection<T>(name);
   }
@@ -49,7 +49,7 @@ export class MongoEmbeddingClient implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     if (this.client) {
       await this.client.close();
-      this.logger.log("MongoDB connection for Embeddings module closed");
+      this.logger.log('MongoDB connection for Embeddings module closed');
     }
   }
 }

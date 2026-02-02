@@ -6,17 +6,17 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
-} from "@nestjs/common";
-import { EmbeddingUseCase } from "@embeddings/in-ports";
-import { ConfigService } from "@nestjs/config";
-import { Service } from "@logging/presentation";
+} from '@nestjs/common';
+import { EmbeddingUseCase } from '@embeddings/in-ports';
+import { ConfigService } from '@nestjs/config';
+import { Service } from '@logging/presentation';
 
 /**
  * EmbeddingController - Controller for embedding operations.
  * Handles batch embedding and search requests.
  */
-@Controller("embeddings")
-@Service("embeddings")
+@Controller('embeddings')
+@Service('embeddings')
 export class EmbeddingController {
   constructor(
     private readonly embeddingUseCase: EmbeddingUseCase,
@@ -27,12 +27,12 @@ export class EmbeddingController {
    * Trigger batch embedding for pending logs.
    * Example: POST /embeddings/batch?limit=100
    */
-  @Post("batch")
+  @Post('batch')
   @HttpCode(HttpStatus.OK)
   async processBatch(
-    @Query("limit", new ParseIntPipe({ optional: true }))
+    @Query('limit', new ParseIntPipe({ optional: true }))
     limit: number = parseInt(
-      this.configService.get<string>("EMBEDDING_BATCH_CHUNK_SIZE") || "50",
+      this.configService.get<string>('EMBEDDING_BATCH_CHUNK_SIZE') || '50',
       10,
     ),
   ) {
@@ -40,7 +40,7 @@ export class EmbeddingController {
       await this.embeddingUseCase.processPendingLogs(limit);
 
     return {
-      message: "Batch embedding process completed",
+      message: 'Batch embedding process completed',
       processedCount,
       timestamp: new Date().toISOString(),
     };
@@ -50,10 +50,10 @@ export class EmbeddingController {
    * Perform semantic search on embedded logs.
    * Example: GET /embeddings/search?q=payment error&limit=5
    */
-  @Get("search")
+  @Get('search')
   async search(
-    @Query("q") query: string,
-    @Query("limit", new ParseIntPipe({ optional: true })) limit: number = 5,
+    @Query('q') query: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 5,
   ) {
     const results = await this.embeddingUseCase.search(query, limit);
     return {
