@@ -75,12 +75,9 @@ export class MongoLogStorageAdapter extends LogStoragePort {
         .toArray();
 
       return docs.map((doc) => {
-        const wideEvent = new WideEvent({
+        const wideEvent = WideEvent.fromDocument({
           requestId: doc.requestId,
-          timestamp:
-            doc.timestamp instanceof Date
-              ? doc.timestamp.toISOString()
-              : doc.timestamp,
+          timestamp: doc.timestamp,
           service: doc.service,
           route: doc.route,
           user: doc.user,

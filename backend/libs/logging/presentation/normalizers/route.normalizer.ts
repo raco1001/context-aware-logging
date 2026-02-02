@@ -1,7 +1,9 @@
-import { Request } from "express";
+import { Request } from 'express';
 
 /**
  * RouteNormalizer - Creates canonical route identifiers for consistent logging.
+ *
+ * This belongs in the presentation layer because it depends on Express Request.
  *
  * Problem:
  * - request.route?.path may be empty depending on the environment
@@ -33,7 +35,7 @@ export class RouteNormalizer {
     const method = request.method.toUpperCase();
     const templatePath = this.getTemplatePath(request);
     const actualPath = this.stripQueryString(request.path);
-    const basePath = process.env.API_BASE_PATH || "";
+    const basePath = process.env.API_BASE_PATH || '';
 
     // Prefer template path for better aggregation (e.g., /users/:id instead of /users/123)
     const path = templatePath || actualPath;
@@ -68,7 +70,7 @@ export class RouteNormalizer {
    * Remove query string from path.
    */
   private static stripQueryString(path: string): string {
-    const queryIndex = path.indexOf("?");
+    const queryIndex = path.indexOf('?');
     return queryIndex === -1 ? path : path.substring(0, queryIndex);
   }
 
@@ -83,7 +85,7 @@ export class RouteNormalizer {
     }
 
     // Remove trailing slash from base path
-    const normalizedBase = basePath.endsWith("/")
+    const normalizedBase = basePath.endsWith('/')
       ? basePath.slice(0, -1)
       : basePath;
 
@@ -93,7 +95,7 @@ export class RouteNormalizer {
     }
 
     // Combine base path with path
-    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     return `${normalizedBase}${normalizedPath}`;
   }
 
@@ -101,7 +103,7 @@ export class RouteNormalizer {
    * Ensure path starts with a slash.
    */
   private static ensureLeadingSlash(path: string): string {
-    return path.startsWith("/") ? path : `/${path}`;
+    return path.startsWith('/') ? path : `/${path}`;
   }
 
   /**

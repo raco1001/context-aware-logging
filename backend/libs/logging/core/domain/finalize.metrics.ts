@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger } from '@nestjs/common';
 
 /**
  * Statistics for finalize operations.
@@ -73,7 +73,7 @@ export class FinalizeMetrics {
     // Using console.error ensures output even if NestJS logger is affected
     console.error(
       `[FinalizeMetrics] Finalize failed: ${error.message}`,
-      error.stack ? `\n${error.stack.split("\n").slice(0, 3).join("\n")}` : "",
+      error.stack ? `\n${error.stack.split('\n').slice(0, 3).join('\n')}` : '',
     );
 
     // Rate-limited warning for high failure rate

@@ -1,9 +1,9 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { MqProducerPort } from "@logging/out-ports";
-import { WideEvent } from "@logging/domain";
-import { LoggingContext } from "@logging/domain";
-import { KafkaProducerClient } from "./kafka-producer.client";
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { MqProducerPort } from '@logging/out-ports';
+import { WideEvent } from '@logging/domain';
+import { LoggingContext } from '@logging/domain';
+import { KafkaProducerClient } from './kafka-producer.client';
 
 /**
  * KafkaProducer - Kafka implementation of MqProducerPort.
@@ -23,7 +23,7 @@ export class KafkaProducer extends MqProducerPort {
   ) {
     super();
     this.topic =
-      this.configService.get<string>("KAFKA_LOG_TOPIC") || "log-events";
+      this.configService.get<string>('KAFKA_LOG_TOPIC') || 'log-events';
   }
 
   async connect(): Promise<void> {
@@ -42,11 +42,11 @@ export class KafkaProducer extends MqProducerPort {
 
   async publish(
     event: WideEvent,
-    metadata: LoggingContext["_metadata"],
+    metadata: LoggingContext['_metadata'],
     summary: string,
   ): Promise<void> {
     if (!this.kafkaProducerClient.isProducerConnected()) {
-      throw new Error("Kafka producer is not connected");
+      throw new Error('Kafka producer is not connected');
     }
 
     try {

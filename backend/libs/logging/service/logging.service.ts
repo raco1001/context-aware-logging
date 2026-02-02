@@ -1,16 +1,12 @@
-import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { LoggerPort } from "@logging/out-ports";
-import {
-  WideEvent,
-  LoggingContext,
-  Latency,
-  SamplingPolicy,
-  SamplingReason,
-} from "@logging/domain";
-import { LoggingUseCase } from "@logging/in-ports";
-import { ContextService } from "./context.service";
-import { LatencyBucket } from "@logging/value-objects";
+import { Injectable, Logger, OnModuleDestroy, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { LoggerPort } from '@logging/out-ports';
+import { WideEvent, LoggingContext, SamplingPolicy } from '@logging/domain';
+import { LoggingUseCase } from '@logging/in-ports';
+import { ContextService } from './context.service';
+
+/** Injection token for SamplingPolicy */
+export const SAMPLING_POLICY = Symbol('SAMPLING_POLICY');
 
 /**
  * Simple LRU Cache implementation using Map (maintains insertion order).
@@ -82,6 +78,7 @@ export class LoggingService extends LoggingUseCase implements OnModuleDestroy {
   constructor(
     private readonly contextService: ContextService,
     private readonly logger: LoggerPort,
+    @Inject(SAMPLING_POLICY)
     private readonly samplingPolicy: SamplingPolicy,
     private readonly configService: ConfigService,
   ) {
@@ -89,14 +86,14 @@ export class LoggingService extends LoggingUseCase implements OnModuleDestroy {
 
     // Configurable cache size (default: 2000)
     this.maxCacheSize = this.configService.get<number>(
-      "LOG_FINALIZED_CACHE_SIZE",
+      'LOG_FINALIZED_CACHE_SIZE',
       2000,
     );
     this.finalizedRequestIds = new LRUCache<string, true>(this.maxCacheSize);
 
     // Configurable max pending finalizes (default: 500)
     this.maxPendingFinalizes = this.configService.get<number>(
-      "LOG_MAX_PENDING_FINALIZES",
+      'LOG_MAX_PENDING_FINALIZES',
       500,
     );
   }
@@ -110,14 +107,7 @@ export class LoggingService extends LoggingUseCase implements OnModuleDestroy {
     service: string,
     route: string,
   ): LoggingContext {
-    const context: LoggingContext = {
-      requestId,
-      timestamp: new Date().toISOString(),
-      service,
-      route,
-      _metadata: {},
-    };
-    return context;
+    return new LoggingContext(requestId, service, route);
   }
 
   /**
@@ -223,19 +213,11 @@ export class LoggingService extends LoggingUseCase implements OnModuleDestroy {
     this.pendingFinalizeCount++;
 
     try {
-      // Create a validated WideEvent instance
-      const event = new WideEvent({
-        requestId: context.requestId,
-        timestamp: context.timestamp,
-        service: context.service,
-        route: context.route,
-        user: context.user as any,
-        error: context.error as any,
-        performance: context.performance,
-      });
+      // Create WideEvent using factory method (handles type conversion)
+      const event = WideEvent.fromContext(context);
 
-      // Phase 3: Generate deterministic summary and embedding status
-      const _summary = this.generateSummary(context);
+      // Generate deterministic summary using domain method
+      const _summary = event.toSummary();
 
       // Add sampling reason to metadata for auditing/debugging
       const enrichedMetadata = {
@@ -272,28 +254,6 @@ export class LoggingService extends LoggingUseCase implements OnModuleDestroy {
       maxPendingFinalizes: this.maxPendingFinalizes,
       droppedCount: this.droppedCount,
     };
-  }
-
-  /**
-   * Phase 3: Deterministic Semantic Serialization
-   * Generates a stable text representation of the event for vector embeddings.
-   */
-  private generateSummary(context: LoggingContext): string {
-    const { service, route, error, user, performance } = context;
-
-    const errorCode = error?.code ?? "NONE";
-    const errorMessage = error?.message ?? "NONE";
-    const userRole = user?.role ?? "ANONYMOUS";
-    const latencyBucket = Latency.getBucket(performance?.durationMs);
-    const outcome = error
-      ? "FAILED"
-      : latencyBucket === LatencyBucket.P_OVER_1000MS
-        ? "WARNING"
-        : latencyBucket === LatencyBucket.P_UNKNOWN
-          ? "EDGE_CASE"
-          : "SUCCESS";
-
-    return `Outcome: ${outcome}, Service: ${service}, Route: ${route}, Error: ${errorCode}, ErrorMessage: ${errorMessage}, UserRole: ${userRole}, LatencyBucket: ${latencyBucket}`;
   }
 
   /**

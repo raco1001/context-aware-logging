@@ -3,17 +3,17 @@ import {
   Logger,
   OnModuleInit,
   OnModuleDestroy,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { Consumer } from "kafkajs";
-import { MongoLogger, KafkaConsumerClient } from "@logging/infrastructure";
-import { WideEvent, LoggingContext } from "@logging/domain";
-import { LoggingMode } from "../../core/domain/logging-mode.enum";
-import { LoggingModeService } from "../logging-mode.service";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Consumer } from 'kafkajs';
+import { MongoLogger, KafkaConsumerClient } from '@logging/infrastructure';
+import { WideEvent, LoggingContext } from '@logging/domain';
+import { LoggingMode } from '../../core/domain/logging-mode.enum';
+import { LoggingModeService } from '../logging-mode.service';
 
 interface LogMessage {
   event: WideEvent;
-  _metadata: LoggingContext["_metadata"];
+  _metadata: LoggingContext['_metadata'];
   summary: string;
   timestamp: string;
 }
@@ -53,23 +53,23 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly loggingModeService: LoggingModeService, // 🔥 상태 머신 주입
     private readonly configService: ConfigService,
   ) {
-    this.topic = this.configService.get<string>("MQ_LOG_TOPIC") || "log-events";
+    this.topic = this.configService.get<string>('MQ_LOG_TOPIC') || 'log-events';
     this.batchSize = parseInt(
-      this.configService.get<string>("MQ_BATCH_SIZE") || "100",
+      this.configService.get<string>('MQ_BATCH_SIZE') || '100',
       10,
     );
     this.batchTimeoutMs = parseInt(
-      this.configService.get<string>("MQ_BATCH_TIMEOUT_MS") || "1000",
+      this.configService.get<string>('MQ_BATCH_TIMEOUT_MS') || '1000',
       10,
     );
 
     // 🔥 상태 변경 감지 - 모드가 변경되면 Consumer를 생성/파괴
     this.loggingModeService.onModeChange((mode) => {
       if (mode === LoggingMode.DIRECT) {
-        this.logger.log("Mode changed to DIRECT. Destroying consumer...");
+        this.logger.log('Mode changed to DIRECT. Destroying consumer...');
         this.destroyConsumer();
       } else if (mode === LoggingMode.KAFKA) {
-        this.logger.log("Mode changed to KAFKA. Starting consumer...");
+        this.logger.log('Mode changed to KAFKA. Starting consumer...');
         this.startConsumer();
       }
     });
@@ -93,7 +93,7 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
    */
   private async startConsumer(): Promise<void> {
     if (this.consumer) {
-      this.logger.debug("Consumer already exists, skipping...");
+      this.logger.debug('Consumer already exists, skipping...');
       return;
     }
 
@@ -168,7 +168,7 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
       this.batchTimeout = null;
     }
 
-    this.logger.log("Consumer destroyed");
+    this.logger.log('Consumer destroyed');
   }
 
   /**
@@ -177,7 +177,7 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
    */
   private handleConsumerFailure(): void {
     this.logger.warn(
-      "Consumer failure detected. Switching to DIRECT mode and starting watchdog.",
+      'Consumer failure detected. Switching to DIRECT mode and starting watchdog.',
     );
 
     // 상태를 DIRECT로 변경 (이것이 Consumer 파괴를 트리거함)
@@ -198,7 +198,7 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
 
     this.consecutiveSuccessCount = 0;
     this.logger.log(
-      "Watchdog started. Monitoring Kafka broker availability...",
+      'Watchdog started. Monitoring Kafka broker availability...',
     );
 
     this.watchdogTimer = setInterval(async () => {
@@ -213,7 +213,7 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
 
           if (this.consecutiveSuccessCount >= this.STABILITY_THRESHOLD) {
             this.logger.log(
-              "Watchdog: Kafka is stable. Switching to KAFKA mode...",
+              'Watchdog: Kafka is stable. Switching to KAFKA mode...',
             );
             this.consecutiveSuccessCount = 0;
             this.stopWatchdog();
@@ -223,7 +223,7 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
           }
         } else {
           this.consecutiveSuccessCount = 0;
-          this.logger.debug("Watchdog: Kafka still offline.");
+          this.logger.debug('Watchdog: Kafka still offline.');
         }
       } catch (error) {
         this.consecutiveSuccessCount = 0;
@@ -241,14 +241,14 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
 
   private async consume(): Promise<void> {
     if (!this.consumer) {
-      throw new Error("Consumer instance does not exist");
+      throw new Error('Consumer instance does not exist');
     }
 
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
         try {
           if (!message.value) {
-            this.logger.warn("Received message with no value");
+            this.logger.warn('Received message with no value');
             return;
           }
 

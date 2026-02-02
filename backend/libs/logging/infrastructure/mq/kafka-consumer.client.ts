@@ -3,10 +3,10 @@ import {
   Logger,
   OnModuleInit,
   OnModuleDestroy,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { Kafka, Consumer, logLevel } from "kafkajs";
-import * as net from "net";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Kafka, Consumer, logLevel } from 'kafkajs';
+import * as net from 'net';
 
 /**
  * KafkaConsumerClient - Infrastructure client for managing Kafka Consumer lifecycle.
@@ -31,13 +31,13 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
 
   constructor(private readonly configService: ConfigService) {
     this.broker =
-      this.configService.get<string>("MQ_BROKER_ADDRESS") || "localhost:9092";
+      this.configService.get<string>('MQ_BROKER_ADDRESS') || 'localhost:9092';
     this.groupId =
-      this.configService.get<string>("MQ_CONSUMER_GROUP") ||
-      "log-consumer-group";
+      this.configService.get<string>('MQ_CONSUMER_GROUP') ||
+      'log-consumer-group';
 
     this.kafka = new Kafka({
-      clientId: "log-consumer-service",
+      clientId: 'log-consumer-service',
       brokers: [this.broker],
       logLevel: logLevel.ERROR,
     });
@@ -49,7 +49,7 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     // The Consumer is created by calling createAndConnect() when MqConsumerService needs it.
-    this.logger.log("Kafka Consumer client ready (lazy initialization)");
+    this.logger.log('Kafka Consumer client ready (lazy initialization)');
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -65,11 +65,11 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
   async createAndConnect(): Promise<Consumer> {
     if (this.consumer) {
       throw new Error(
-        "Consumer already exists. Destroy it first before creating a new one.",
+        'Consumer already exists. Destroy it first before creating a new one.',
       );
     }
 
-    this.logger.log("Creating new Consumer instance...");
+    this.logger.log('Creating new Consumer instance...');
 
     this.consumer = this.kafka.consumer({
       groupId: this.groupId,
@@ -79,11 +79,11 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
 
     const { CONNECT, DISCONNECT } = this.consumer.events;
     this.consumer.on(CONNECT, () => {
-      this.logger.log("Kafka Consumer connected");
+      this.logger.log('Kafka Consumer connected');
     });
 
     this.consumer.on(DISCONNECT, () => {
-      this.logger.warn("Kafka Consumer disconnected");
+      this.logger.warn('Kafka Consumer disconnected');
     });
 
     await this.consumer.connect();
@@ -106,16 +106,16 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      this.logger.log("Destroying Consumer instance...");
+      this.logger.log('Destroying Consumer instance...');
       await this.consumer.disconnect();
-      this.logger.log("Consumer disconnected");
+      this.logger.log('Consumer disconnected');
     } catch (error) {
       this.logger.warn(
         `Consumer disconnect error (may already be disconnected): ${error.message}`,
       );
     } finally {
       this.consumer = null;
-      this.logger.log("Consumer instance destroyed (GC eligible)");
+      this.logger.log('Consumer instance destroyed (GC eligible)');
     }
   }
 
@@ -134,7 +134,7 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
   getConsumer(): Consumer {
     if (!this.consumer) {
       throw new Error(
-        "Consumer instance does not exist. Create it first using createAndConnect().",
+        'Consumer instance does not exist. Create it first using createAndConnect().',
       );
     }
     return this.consumer;
@@ -148,22 +148,22 @@ export class KafkaConsumerClient implements OnModuleInit, OnModuleDestroy {
    */
   async checkBrokerAvailability(): Promise<boolean> {
     return new Promise((resolve) => {
-      const [host, portStr] = this.broker.split(":");
-      const port = parseInt(portStr || "9092", 10);
+      const [host, portStr] = this.broker.split(':');
+      const port = parseInt(portStr || '9092', 10);
 
       const socket = net.createConnection({ host, port, timeout: 1000 });
 
-      socket.on("connect", () => {
+      socket.on('connect', () => {
         socket.destroy();
         resolve(true);
       });
 
-      socket.on("error", () => {
+      socket.on('error', () => {
         socket.destroy();
         resolve(false);
       });
 
-      socket.on("timeout", () => {
+      socket.on('timeout', () => {
         socket.destroy();
         resolve(false);
       });

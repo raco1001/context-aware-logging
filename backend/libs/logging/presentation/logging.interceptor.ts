@@ -4,17 +4,16 @@ import {
   ExecutionContext,
   CallHandler,
   Inject,
-} from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
-import { Observable, throwError } from "rxjs";
-import { catchError, finalize, tap } from "rxjs/operators";
-import { Request } from "express";
-import { randomUUID } from "crypto";
-import { LoggingUseCase } from "@logging/in-ports";
-import { ContextService } from "libs/logging/service";
-import { RouteNormalizer } from "@logging/domain";
-import { ErrorNormalizer } from "@logging/domain";
-import { FinalizeMetrics } from "@logging/domain";
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Observable, throwError } from 'rxjs';
+import { catchError, finalize, tap } from 'rxjs/operators';
+import { Request } from 'express';
+import { randomUUID } from 'crypto';
+import { LoggingUseCase } from '@logging/in-ports';
+import { ContextService } from 'libs/logging/service';
+import { FinalizeMetrics } from '@logging/domain';
+import { RouteNormalizer, ErrorNormalizer } from './normalizers';
 
 // Import decorator metadata keys
 import {
@@ -29,7 +28,7 @@ import {
   LogMetaConfig,
   LogRedactConfig,
   DEFAULT_REDACT_PATHS,
-} from "./decorators";
+} from './decorators';
 
 /**
  * Cached metadata for a handler to avoid repeated Reflector lookups.
@@ -65,7 +64,7 @@ interface HandlerMetadata {
  */
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
-  private readonly SERVICE_METADATA_KEY = "service";
+  private readonly SERVICE_METADATA_KEY = 'service';
 
   /**
    * Cache for handler metadata to avoid repeated Reflector lookups.
@@ -129,11 +128,13 @@ export class LoggingInterceptor implements NestInterceptor {
             controller,
           ) ||
           null,
-        redactConfig:
-          this.reflector.get<LogRedactConfig>(LOG_REDACT_KEY, handler) ||
+        redactConfig: this.reflector.get<LogRedactConfig>(
+          LOG_REDACT_KEY,
+          handler,
+        ) ||
           this.reflector.get<LogRedactConfig>(LOG_REDACT_KEY, controller) || {
             paths: DEFAULT_REDACT_PATHS,
-            replacement: "[REDACTED]",
+            replacement: '[REDACTED]',
           },
         samplingHint:
           this.reflector.get<string>(LOG_SAMPLING_HINT_KEY, handler) ||
@@ -163,12 +164,12 @@ export class LoggingInterceptor implements NestInterceptor {
 
     // Generate or extract request ID
     const requestId =
-      (request.headers["x-request-id"] as string) || randomUUID();
-    request.headers["x-request-id"] = requestId;
+      (request.headers['x-request-id'] as string) || randomUUID();
+    request.headers['x-request-id'] = requestId;
 
     // Get service name from cached metadata, fallback to env var or default
     const serviceName =
-      metadata.serviceName || process.env.SERVICE_NAME || "backend";
+      metadata.serviceName || process.env.SERVICE_NAME || 'backend';
 
     // 2. Use RouteNormalizer for consistent route identification
     const route = RouteNormalizer.normalize(request);
@@ -256,7 +257,7 @@ export class LoggingInterceptor implements NestInterceptor {
       if (user && user.id) {
         loggingContext.user = {
           id: String(user.id),
-          role: String(user.role || "UNKNOWN"),
+          role: String(user.role || 'UNKNOWN'),
         };
       }
       return;
@@ -265,12 +266,15 @@ export class LoggingInterceptor implements NestInterceptor {
     // Check @LogUser with path config
     if (metadata.userConfig) {
       const userId = this.extractValueByPath(request, metadata.userConfig.id);
-      const userRole = this.extractValueByPath(request, metadata.userConfig.role);
+      const userRole = this.extractValueByPath(
+        request,
+        metadata.userConfig.role,
+      );
 
       if (userId) {
         loggingContext.user = {
           id: String(userId),
-          role: String(userRole || "UNKNOWN"),
+          role: String(userRole || 'UNKNOWN'),
         };
       }
     }
@@ -298,10 +302,11 @@ export class LoggingInterceptor implements NestInterceptor {
         // Check if this path should be redacted
         const shouldRedact = redactConfig.paths.some(
           (redactPath) =>
-            path === redactPath || path.endsWith(`.${redactPath.split(".").pop()}`),
+            path === redactPath ||
+            path.endsWith(`.${redactPath.split('.').pop()}`),
         );
 
-        const key = path.split(".").pop() || path;
+        const key = path.split('.').pop() || path;
         extractedMeta[key] = shouldRedact
           ? redactConfig.replacement
           : this.sanitizeValue(
@@ -330,7 +335,7 @@ export class LoggingInterceptor implements NestInterceptor {
     for (const path of config.paths) {
       const value = this.getNestedValue(response, path);
       if (value !== undefined) {
-        const key = path.includes(".") ? path.replace(/\./g, "_") : path;
+        const key = path.includes('.') ? path.replace(/\./g, '_') : path;
         meta[`response_${key}`] = this.sanitizeValue(
           value,
           config.maxDepth ?? 2,
@@ -347,22 +352,22 @@ export class LoggingInterceptor implements NestInterceptor {
    * Supports: body.field, params.field, query.field, headers.field
    */
   private extractValueByPath(request: Request, path: string): any {
-    const parts = path.split(".");
+    const parts = path.split('.');
     const source = parts[0];
-    const fieldPath = parts.slice(1).join(".");
+    const fieldPath = parts.slice(1).join('.');
 
     let sourceObj: any;
     switch (source) {
-      case "body":
+      case 'body':
         sourceObj = request.body;
         break;
-      case "params":
+      case 'params':
         sourceObj = request.params;
         break;
-      case "query":
+      case 'query':
         sourceObj = request.query;
         break;
-      case "headers":
+      case 'headers':
         sourceObj = request.headers;
         break;
       default:
@@ -384,7 +389,7 @@ export class LoggingInterceptor implements NestInterceptor {
       return obj;
     }
 
-    const parts = path.split(".");
+    const parts = path.split('.');
     let current = obj;
 
     for (const part of parts) {
@@ -413,13 +418,13 @@ export class LoggingInterceptor implements NestInterceptor {
       return value;
     }
 
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       return value.length > maxStringLength
-        ? value.slice(0, maxStringLength) + "..."
+        ? value.slice(0, maxStringLength) + '...'
         : value;
     }
 
-    if (typeof value === "number" || typeof value === "boolean") {
+    if (typeof value === 'number' || typeof value === 'boolean') {
       return value;
     }
 
@@ -427,19 +432,21 @@ export class LoggingInterceptor implements NestInterceptor {
       if (Array.isArray(value)) {
         return `[Array(${value.length})]`;
       }
-      if (typeof value === "object") {
-        return "[Object]";
+      if (typeof value === 'object') {
+        return '[Object]';
       }
       return String(value);
     }
 
     if (Array.isArray(value)) {
-      return value.slice(0, 10).map((item) =>
-        this.sanitizeValue(item, maxDepth, maxStringLength, currentDepth + 1),
-      );
+      return value
+        .slice(0, 10)
+        .map((item) =>
+          this.sanitizeValue(item, maxDepth, maxStringLength, currentDepth + 1),
+        );
     }
 
-    if (typeof value === "object") {
+    if (typeof value === 'object') {
       const sanitized: Record<string, any> = {};
       const keys = Object.keys(value).slice(0, 20);
       for (const key of keys) {

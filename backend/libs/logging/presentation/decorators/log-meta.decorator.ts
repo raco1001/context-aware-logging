@@ -1,10 +1,10 @@
-import { SetMetadata } from "@nestjs/common";
+import { SetMetadata } from '@nestjs/common';
 
 /**
  * Metadata keys for request/response meta logging decorators
  */
-export const LOG_REQUEST_META_KEY = "log_request_meta";
-export const LOG_RESPONSE_META_KEY = "log_response_meta";
+export const LOG_REQUEST_META_KEY = 'log_request_meta';
+export const LOG_RESPONSE_META_KEY = 'log_response_meta';
 
 /**
  * Configuration for meta extraction

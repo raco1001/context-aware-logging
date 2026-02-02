@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { AsyncLocalStorage } from "async_hooks";
-import { LoggingContext } from "@logging/domain";
+import { Injectable } from '@nestjs/common';
+import { AsyncLocalStorage } from 'async_hooks';
+import { LoggingContext } from '@logging/domain';
 
 /**
  * ContextService - Manages request-scoped logging context using AsyncLocalStorage.
@@ -28,11 +28,12 @@ export class ContextService {
 
   /**
    * Update the current context by merging new values.
+   * Uses LoggingContext.enrich() for type-safe updates.
    */
   updateContext(updates: Partial<LoggingContext>): void {
     const context = this.getContext();
     if (context) {
-      Object.assign(context, updates);
+      context.enrich(updates);
     }
   }
 
@@ -40,21 +41,30 @@ export class ContextService {
    * Add user context to the current logging context.
    */
   addUserContext(user: { id: string; role: string }): void {
-    this.updateContext({ user });
+    const context = this.getContext();
+    if (context) {
+      context.user = user;
+    }
   }
 
   /**
    * Add error context to the current logging context.
    */
   addError(error: { code: string; message: string }): void {
-    this.updateContext({ error });
+    const context = this.getContext();
+    if (context) {
+      context.error = error;
+    }
   }
 
   /**
    * Add performance context to the current logging context.
    */
   addPerformance(performance: { durationMs: number }): void {
-    this.updateContext({ performance });
+    const context = this.getContext();
+    if (context) {
+      context.performance = performance;
+    }
   }
 
   /**
@@ -62,6 +72,9 @@ export class ContextService {
    * Use this when an error occurs in a downstream service to track which step failed.
    */
   setService(service: string): void {
-    this.updateContext({ service });
+    const context = this.getContext();
+    if (context) {
+      context.service = service;
+    }
   }
 }

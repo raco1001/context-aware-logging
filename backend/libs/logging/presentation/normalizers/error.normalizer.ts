@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from "@nestjs/common";
+import { HttpException, HttpStatus } from '@nestjs/common';
 
 /**
  * Structured error metadata for detailed error analysis.
@@ -32,6 +32,8 @@ export interface NormalizedError {
 /**
  * ErrorNormalizer - Normalizes various error types to a consistent structure.
  *
+ * This belongs in the presentation layer because it depends on NestJS HttpException.
+ *
  * Problem:
  * - HttpException.getResponse() returns string | object | array
  * - Error messages are inconsistent across different error sources
@@ -48,8 +50,7 @@ export class ErrorNormalizer {
   /** Maximum stack trace lines in development */
   private static readonly MAX_STACK_LINES = 5;
   /** Whether to include stack traces */
-  private static readonly INCLUDE_STACK =
-    process.env.NODE_ENV !== "production";
+  private static readonly INCLUDE_STACK = process.env.NODE_ENV !== 'production';
 
   /**
    * Normalize any error to a consistent structure.
@@ -94,11 +95,11 @@ export class ErrorNormalizer {
       (error as any).code ||
       (error as any).status?.toString() ||
       error.constructor.name ||
-      "UNKNOWN";
+      'UNKNOWN';
 
     return {
       code: String(code),
-      message: this.truncateMessage(error.message || "Unknown error"),
+      message: this.truncateMessage(error.message || 'Unknown error'),
       _errorMeta: {
         exceptionName: error.constructor.name,
         stack: this.getStack(error),
@@ -111,14 +112,14 @@ export class ErrorNormalizer {
    */
   private static normalizeUnknown(error: unknown): NormalizedError {
     const message =
-      typeof error === "string"
+      typeof error === 'string'
         ? error
-        : typeof error === "object" && error !== null
+        : typeof error === 'object' && error !== null
           ? JSON.stringify(error).slice(0, this.MAX_MESSAGE_LENGTH)
-          : "Unknown error";
+          : 'Unknown error';
 
     return {
-      code: "UNKNOWN",
+      code: 'UNKNOWN',
       message: this.truncateMessage(message),
       _errorMeta: {
         rawResponse: error,
@@ -130,7 +131,7 @@ export class ErrorNormalizer {
    * Extract error code from HttpException response.
    */
   private static extractCode(response: unknown, status: number): string {
-    if (typeof response === "object" && response !== null) {
+    if (typeof response === 'object' && response !== null) {
       const obj = response as Record<string, unknown>;
       // Check common error code field names
       const code =
@@ -147,17 +148,17 @@ export class ErrorNormalizer {
    */
   private static httpStatusToCode(status: number): string {
     const statusMap: Record<number, string> = {
-      [HttpStatus.BAD_REQUEST]: "BAD_REQUEST",
-      [HttpStatus.UNAUTHORIZED]: "UNAUTHORIZED",
-      [HttpStatus.FORBIDDEN]: "FORBIDDEN",
-      [HttpStatus.NOT_FOUND]: "NOT_FOUND",
-      [HttpStatus.CONFLICT]: "CONFLICT",
-      [HttpStatus.UNPROCESSABLE_ENTITY]: "VALIDATION_ERROR",
-      [HttpStatus.TOO_MANY_REQUESTS]: "RATE_LIMITED",
-      [HttpStatus.INTERNAL_SERVER_ERROR]: "INTERNAL_ERROR",
-      [HttpStatus.BAD_GATEWAY]: "BAD_GATEWAY",
-      [HttpStatus.SERVICE_UNAVAILABLE]: "SERVICE_UNAVAILABLE",
-      [HttpStatus.GATEWAY_TIMEOUT]: "GATEWAY_TIMEOUT",
+      [HttpStatus.BAD_REQUEST]: 'BAD_REQUEST',
+      [HttpStatus.UNAUTHORIZED]: 'UNAUTHORIZED',
+      [HttpStatus.FORBIDDEN]: 'FORBIDDEN',
+      [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
+      [HttpStatus.CONFLICT]: 'CONFLICT',
+      [HttpStatus.UNPROCESSABLE_ENTITY]: 'VALIDATION_ERROR',
+      [HttpStatus.TOO_MANY_REQUESTS]: 'RATE_LIMITED',
+      [HttpStatus.INTERNAL_SERVER_ERROR]: 'INTERNAL_ERROR',
+      [HttpStatus.BAD_GATEWAY]: 'BAD_GATEWAY',
+      [HttpStatus.SERVICE_UNAVAILABLE]: 'SERVICE_UNAVAILABLE',
+      [HttpStatus.GATEWAY_TIMEOUT]: 'GATEWAY_TIMEOUT',
     };
 
     return statusMap[status] || `HTTP_${status}`;
@@ -166,21 +167,18 @@ export class ErrorNormalizer {
   /**
    * Extract message from HttpException response.
    */
-  private static extractMessage(
-    response: unknown,
-    fallback: string,
-  ): string {
+  private static extractMessage(response: unknown, fallback: string): string {
     let message: string;
 
-    if (typeof response === "string") {
+    if (typeof response === 'string') {
       message = response;
     } else if (Array.isArray(response)) {
       // Validation errors - join first few
-      message = response.slice(0, 3).join("; ");
+      message = response.slice(0, 3).join('; ');
       if (response.length > 3) {
         message += `... (+${response.length - 3} more)`;
       }
-    } else if (typeof response === "object" && response !== null) {
+    } else if (typeof response === 'object' && response !== null) {
       const obj = response as Record<string, unknown>;
       message = String(
         obj.errorMessage || obj.message || obj.error || fallback,
@@ -202,7 +200,7 @@ export class ErrorNormalizer {
       return response.map(String).slice(0, 10);
     }
 
-    if (typeof response === "object" && response !== null) {
+    if (typeof response === 'object' && response !== null) {
       const obj = response as Record<string, unknown>;
       if (Array.isArray(obj.message)) {
         return obj.message.map(String).slice(0, 10);
@@ -245,8 +243,8 @@ export class ErrorNormalizer {
       return undefined;
     }
 
-    const lines = error.stack.split("\n");
-    return lines.slice(0, this.MAX_STACK_LINES + 1).join("\n");
+    const lines = error.stack.split('\n');
+    return lines.slice(0, this.MAX_STACK_LINES + 1).join('\n');
   }
 
   /**
@@ -256,6 +254,6 @@ export class ErrorNormalizer {
     if (message.length <= this.MAX_MESSAGE_LENGTH) {
       return message;
     }
-    return message.slice(0, this.MAX_MESSAGE_LENGTH - 3) + "...";
+    return message.slice(0, this.MAX_MESSAGE_LENGTH - 3) + '...';
   }
 }

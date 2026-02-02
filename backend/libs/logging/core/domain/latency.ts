@@ -1,4 +1,4 @@
-import { LatencyBucket } from "../value-objects";
+import { LatencyBucket } from '../value-objects';
 
 /**
  * Latency - Utility class for determining latency buckets.

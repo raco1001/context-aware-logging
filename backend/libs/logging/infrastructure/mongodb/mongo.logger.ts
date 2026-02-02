@@ -1,10 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { LoggerPort } from "@logging/out-ports";
-import { WideEvent } from "@logging/domain";
-import { MongoConnectionClient } from "./mongo.client";
-import { LoggingContext } from "@logging/domain";
-import { Document } from "mongodb";
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { LoggerPort } from '@logging/out-ports';
+import { WideEvent } from '@logging/domain';
+import { MongoConnectionClient } from './mongo.client';
+import { LoggingContext } from '@logging/domain';
+import { Document } from 'mongodb';
 
 /**
  * MongoLogger - Infrastructure layer implementation of LoggerPort.
@@ -18,7 +18,7 @@ import { Document } from "mongodb";
 @Injectable()
 export class MongoLogger extends LoggerPort implements OnModuleDestroy {
   private readonly internalLogger = new Logger(MongoLogger.name);
-  private readonly collectionName = "wide_events";
+  private readonly collectionName = 'wide_events';
 
   // Batch write configuration
   private readonly buffer: Document[] = [];
@@ -34,9 +34,9 @@ export class MongoLogger extends LoggerPort implements OnModuleDestroy {
     super();
 
     // Configurable via environment variables
-    this.batchSize = this.configService.get<number>("LOG_BATCH_SIZE", 50);
+    this.batchSize = this.configService.get<number>('LOG_BATCH_SIZE', 50);
     this.flushIntervalMs = this.configService.get<number>(
-      "LOG_FLUSH_INTERVAL_MS",
+      'LOG_FLUSH_INTERVAL_MS',
       1000,
     );
 
@@ -50,7 +50,7 @@ export class MongoLogger extends LoggerPort implements OnModuleDestroy {
    */
   async log(
     event: WideEvent,
-    _metadata: LoggingContext["_metadata"] | undefined,
+    _metadata: LoggingContext['_metadata'] | undefined,
     _summary: string,
   ): Promise<void> {
     const document = {

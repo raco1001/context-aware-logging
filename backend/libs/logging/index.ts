@@ -4,15 +4,15 @@
  */
 
 // Module
-export { LoggingModule } from "./logging.module";
+export { LoggingModule } from './logging.module';
 
 // Services
-export { LoggingService } from "./service/logging.service";
-export { LoggingUseCase } from "./core/ports/in/logging.use-case";
-export { ContextService } from "./service/context.service";
+export { LoggingService } from './service/logging.service';
+export { LoggingUseCase } from './core/ports/in/logging.use-case';
+export { ContextService } from './service/context.service';
 
 // Interceptors
-export { LoggingInterceptor } from "./presentation/logging.interceptor";
+export { LoggingInterceptor } from './presentation/logging.interceptor';
 
 // Decorators
 export {
@@ -24,9 +24,10 @@ export {
   LogSamplingHint,
   LogRedact,
   Service,
-} from "./presentation";
+} from './presentation';
 
 // Domain utilities
-export { FinalizeMetrics } from "./core/domain/finalize.metrics";
-export { RouteNormalizer } from "./core/domain/route.normalizer";
-export { ErrorNormalizer } from "./core/domain/error.normalizer";
+export { FinalizeMetrics } from './core/domain/finalize.metrics';
+
+// Presentation utilities (moved from domain - depends on Express/NestJS)
+export { RouteNormalizer, ErrorNormalizer } from './presentation/normalizers';

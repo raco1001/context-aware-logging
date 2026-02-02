@@ -1,4 +1,4 @@
-import { Consumer } from "kafkajs";
+import { Consumer } from 'kafkajs';
 
 export abstract class MqConsumerPort {
   abstract subscribe(topic: string): Promise<void>;

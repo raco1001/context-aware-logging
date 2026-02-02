@@ -1,15 +1,15 @@
-import { SetMetadata } from "@nestjs/common";
+import { SetMetadata } from '@nestjs/common';
 
 /**
  * Metadata keys for logging control decorators
  */
-export const NO_LOG_KEY = "no_log";
-export const LOG_SAMPLING_HINT_KEY = "log_sampling_hint";
+export const NO_LOG_KEY = 'no_log';
+export const LOG_SAMPLING_HINT_KEY = 'log_sampling_hint';
 
 /**
  * Sampling hint values
  */
-export type SamplingHintLevel = "critical" | "important" | "normal" | "low";
+export type SamplingHintLevel = 'critical' | 'important' | 'normal' | 'low';
 
 /**
  * @NoLog - Excludes the endpoint from logging entirely.

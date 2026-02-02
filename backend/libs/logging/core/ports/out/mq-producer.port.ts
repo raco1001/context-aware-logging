@@ -1,5 +1,5 @@
-import { WideEvent } from "@logging/domain";
-import { LoggingContext } from "@logging/domain";
+import { WideEvent } from '@logging/domain';
+import { LoggingContext } from '@logging/domain';
 
 /**
  * MQ Client Port - Interface for message queue operations.
@@ -14,7 +14,7 @@ export abstract class MqProducerPort {
    */
   abstract publish(
     event: WideEvent,
-    metadata: LoggingContext["_metadata"],
+    metadata: LoggingContext['_metadata'],
     summary: string,
   ): Promise<void>;
 

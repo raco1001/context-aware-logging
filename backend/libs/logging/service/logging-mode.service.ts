@@ -1,5 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { LoggingMode } from "@logging/domain";
+import { Injectable, Logger } from '@nestjs/common';
+import { LoggingMode } from '@logging/domain';
 
 /**
  * LoggingModeService - A service that manages the logging mode.

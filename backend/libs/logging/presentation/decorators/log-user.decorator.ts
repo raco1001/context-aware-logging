@@ -1,10 +1,10 @@
-import { SetMetadata } from "@nestjs/common";
+import { SetMetadata } from '@nestjs/common';
 
 /**
  * Metadata keys for user logging decorators
  */
-export const LOG_USER_KEY = "log_user";
-export const LOG_USER_FROM_REQUEST_KEY = "log_user_from_request";
+export const LOG_USER_KEY = 'log_user';
+export const LOG_USER_FROM_REQUEST_KEY = 'log_user_from_request';
 
 /**
  * Configuration for extracting user information from request

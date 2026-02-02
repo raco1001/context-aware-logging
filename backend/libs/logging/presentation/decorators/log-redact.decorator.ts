@@ -1,9 +1,9 @@
-import { SetMetadata } from "@nestjs/common";
+import { SetMetadata } from '@nestjs/common';
 
 /**
  * Metadata key for redaction decorator
  */
-export const LOG_REDACT_KEY = "log_redact";
+export const LOG_REDACT_KEY = 'log_redact';
 
 /**
  * Redaction configuration
@@ -19,21 +19,21 @@ export interface LogRedactConfig {
  * Default paths that are always redacted for security
  */
 export const DEFAULT_REDACT_PATHS = [
-  "body.password",
-  "body.currentPassword",
-  "body.newPassword",
-  "body.confirmPassword",
-  "body.secret",
-  "body.apiKey",
-  "body.token",
-  "body.accessToken",
-  "body.refreshToken",
-  "body.cardNumber",
-  "body.cvv",
-  "body.ssn",
-  "headers.authorization",
-  "headers.cookie",
-  "headers.x-api-key",
+  'body.password',
+  'body.currentPassword',
+  'body.newPassword',
+  'body.confirmPassword',
+  'body.secret',
+  'body.apiKey',
+  'body.token',
+  'body.accessToken',
+  'body.refreshToken',
+  'body.cardNumber',
+  'body.cvv',
+  'body.ssn',
+  'headers.authorization',
+  'headers.cookie',
+  'headers.x-api-key',
 ];
 
 /**
@@ -74,6 +74,6 @@ export function LogRedact(pathsOrConfig: string[] | LogRedactConfig) {
 
   return SetMetadata(LOG_REDACT_KEY, {
     paths: [...DEFAULT_REDACT_PATHS, ...config.paths],
-    replacement: config.replacement ?? "[REDACTED]",
+    replacement: config.replacement ?? '[REDACTED]',
   });
 }
