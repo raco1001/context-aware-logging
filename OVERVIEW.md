@@ -68,7 +68,7 @@ From **Phase 1**, this project adheres to the principles of **Hexagonal (Ports &
 
 - **Why?**: Since the project evolves through phases, it was crucial to keep the domain logic stable while swapping or adding external infrastructure (Outbound Adapters) like different storage types or message queues.
 - **Maintainability**: The focus is on readable, traceable code over premature performance optimization.
-- **Extensibility**: Different adapters can coexist or complement each other in the same runtime (see [Phase 6 docs](docs/06-phase-additional.md)).
+- **Extensibility**: Different adapters can coexist or complement each other in the same runtime (see [Phase 6 docs](docs/en/06-phase-additional.md)).
 
 ### D-2. Hardening & Infrastructure (Phase 5)
 
