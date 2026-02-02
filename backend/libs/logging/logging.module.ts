@@ -20,7 +20,7 @@ import { LoggerPort } from "@logging/out-ports";
 import { MqProducerPort } from "@logging/out-ports";
 import { LoggingUseCase } from "@logging/in-ports";
 import { LoggingInterceptor } from "@logging/presentation";
-import { SamplingPolicy } from "@logging/domain";
+import { SamplingPolicy, FinalizeMetrics } from "@logging/domain";
 
 // Load environment variables immediately to support dynamic module registration
 dotenv.config();
@@ -43,6 +43,7 @@ export class LoggingModule {
     const providers: Provider[] = [
       ContextService,
       SamplingPolicy,
+      FinalizeMetrics,
       {
         provide: LoggingUseCase,
         useClass: LoggingService,
@@ -56,6 +57,7 @@ export class LoggingModule {
       LoggingService,
       ContextService,
       LoggingInterceptor,
+      FinalizeMetrics,
     ];
 
     if (storageType === "file") {

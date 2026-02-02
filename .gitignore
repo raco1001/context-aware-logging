@@ -12,3 +12,4 @@
 test_data/payments_data.json
 */**/.env
 docs/ko/audit
+.pnpm-store/

@@ -13,3 +13,20 @@ export { ContextService } from "./service/context.service";
 
 // Interceptors
 export { LoggingInterceptor } from "./presentation/logging.interceptor";
+
+// Decorators
+export {
+  LogUser,
+  LogUserFromRequest,
+  LogRequestMeta,
+  LogResponseMeta,
+  NoLog,
+  LogSamplingHint,
+  LogRedact,
+  Service,
+} from "./presentation";
+
+// Domain utilities
+export { FinalizeMetrics } from "./core/domain/finalize.metrics";
+export { RouteNormalizer } from "./core/domain/route.normalizer";
+export { ErrorNormalizer } from "./core/domain/error.normalizer";
