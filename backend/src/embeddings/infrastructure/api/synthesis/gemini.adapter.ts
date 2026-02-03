@@ -1,8 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { SynthesisPort } from "@embeddings/out-ports";
-import { QueryMetadata } from "@embeddings/dtos";
-import { GeminiClient } from "./gemini.client";
-import { AnalysisResult } from "@embeddings/dtos";
+import { Injectable, Logger } from '@nestjs/common';
+import { SynthesisPort } from '@embeddings/out-ports';
+import { QueryMetadata } from '@embeddings/dtos';
+import { GeminiClient } from './gemini.client';
+import { AnalysisResult } from '@embeddings/dtos';
 import {
   QueryMetadataSynthesisPrompt,
   SemanticSynthesisPrompt,
@@ -11,7 +11,7 @@ import {
   StatisticalAnalysisPrompt,
   GroundingVerificationPrompt,
   LogStyleTransformationPrompt,
-} from "src/embeddings/core/domain/prompts/implementations";
+} from 'src/embeddings/core/domain/prompts/implementations';
 
 /**
  * GeminiAdapter - Adapter that performs actual Gemini API operations
@@ -127,7 +127,7 @@ export class GeminiAdapter extends SynthesisPort {
       }
 
       return {
-        templateId: parsed.templateId || "TOP_ERROR_CODES",
+        templateId: parsed.templateId || 'TOP_ERROR_CODES',
         params: {
           ...parsed.params,
           metadata: finalMetadata,
@@ -157,7 +157,7 @@ export class GeminiAdapter extends SynthesisPort {
           };
 
       return {
-        templateId: "TOP_ERROR_CODES",
+        templateId: 'TOP_ERROR_CODES',
         params: {
           topN: 5,
           metadata: fallbackMetadata,
@@ -170,14 +170,14 @@ export class GeminiAdapter extends SynthesisPort {
     query: string,
     contexts: any[] | { aggregationResults?: any; contextLogs?: any[] },
     history: any[] = [],
-    targetLanguage?: "Korean" | "English",
+    targetLanguage?: 'Korean' | 'English',
   ): Promise<{ answer: string; confidence: number }> {
     try {
       const isAggregationResult =
         contexts &&
-        typeof contexts === "object" &&
+        typeof contexts === 'object' &&
         !Array.isArray(contexts) &&
-        ("aggregationResults" in contexts || "contextLogs" in contexts);
+        ('aggregationResults' in contexts || 'contextLogs' in contexts);
 
       let contextText: string;
 
@@ -290,7 +290,7 @@ export class GeminiAdapter extends SynthesisPort {
   async summarizeHistory(history: AnalysisResult[]): Promise<string> {
     try {
       if (!history || history.length === 0) {
-        return "";
+        return '';
       }
 
       this.logger.debug(`Summarizing ${history.length} conversation turns`);
@@ -325,10 +325,10 @@ export class GeminiAdapter extends SynthesisPort {
     answer: string,
     groundingContext: any[],
   ): Promise<{
-    status: "VERIFIED" | "PARTIALLY_VERIFIED" | "NOT_VERIFIED";
+    status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'NOT_VERIFIED';
     confidenceAdjustment: number;
     unverifiedClaims: string[];
-    action: "KEEP_ANSWER" | "ADJUST_CONFIDENCE" | "REJECT_ANSWER";
+    action: 'KEEP_ANSWER' | 'ADJUST_CONFIDENCE' | 'REJECT_ANSWER';
     reasoning: string;
   }> {
     try {
@@ -362,7 +362,7 @@ export class GeminiAdapter extends SynthesisPort {
       }
 
       // Validate and normalize the response
-      const status = parsed.status || "NOT_VERIFIED";
+      const status = parsed.status || 'NOT_VERIFIED';
       const confidenceAdjustment = Math.max(
         0,
         Math.min(1, parsed.confidenceAdjustment ?? 0.5),
@@ -370,8 +370,8 @@ export class GeminiAdapter extends SynthesisPort {
       const unverifiedClaims = Array.isArray(parsed.unverifiedClaims)
         ? parsed.unverifiedClaims
         : [];
-      const action = parsed.action || "ADJUST_CONFIDENCE";
-      const reasoning = parsed.reasoning || "Verification completed";
+      const action = parsed.action || 'ADJUST_CONFIDENCE';
+      const reasoning = parsed.reasoning || 'Verification completed';
 
       this.logger.log(
         `Grounding verification result: ${status}, confidence adjustment: ${confidenceAdjustment}, action: ${action}`,
@@ -379,7 +379,7 @@ export class GeminiAdapter extends SynthesisPort {
 
       if (unverifiedClaims.length > 0) {
         this.logger.warn(
-          `Found ${unverifiedClaims.length} unverified claims: ${unverifiedClaims.join(", ")}`,
+          `Found ${unverifiedClaims.length} unverified claims: ${unverifiedClaims.join(', ')}`,
         );
       }
 
@@ -396,10 +396,10 @@ export class GeminiAdapter extends SynthesisPort {
         error.stack,
       );
       return {
-        status: "NOT_VERIFIED",
+        status: 'NOT_VERIFIED',
         confidenceAdjustment: 0.3,
-        unverifiedClaims: ["Verification process failed"],
-        action: "ADJUST_CONFIDENCE",
+        unverifiedClaims: ['Verification process failed'],
+        action: 'ADJUST_CONFIDENCE',
         reasoning: `Verification error: ${error.message}`,
       };
     }
@@ -435,8 +435,8 @@ export class GeminiAdapter extends SynthesisPort {
   /**
    * Simple language detection based on character sets.
    */
-  detectLanguage(text: string): "Korean" | "English" {
+  detectLanguage(text: string): 'Korean' | 'English' {
     const koreanRegex = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/;
-    return koreanRegex.test(text) ? "Korean" : "English";
+    return koreanRegex.test(text) ? 'Korean' : 'English';
   }
 }

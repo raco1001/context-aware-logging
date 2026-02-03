@@ -1,2 +1,2 @@
-export * from "./embedding.entity";
-export * from "./prompt-instance.entity";
+export * from './embedding.entity';
+export * from './prompt-instance.entity';

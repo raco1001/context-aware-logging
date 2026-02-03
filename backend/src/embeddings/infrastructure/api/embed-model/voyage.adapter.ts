@@ -1,7 +1,7 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { EmbeddingPort, RerankPort } from "@embeddings/out-ports";
-import { EmbeddingResult } from "@embeddings/domain";
-import { VoyageClient } from "./voyage.client";
+import { Injectable, Logger } from '@nestjs/common';
+import { EmbeddingPort, RerankPort } from '@embeddings/out-ports';
+import { EmbeddingResult } from '@embeddings/domain';
+import { VoyageClient } from './voyage.client';
 
 /**
  * VoyageAdapter - Adapter that performs actual Voyage AI API operations
@@ -31,12 +31,12 @@ export class VoyageAdapter extends EmbeddingPort implements RerankPort {
         !response.model ||
         !response.usage
       ) {
-        throw new Error("Invalid response from Voyage AI API");
+        throw new Error('Invalid response from Voyage AI API');
       }
 
       const firstItem = response.data[0];
       if (!firstItem.embedding || !response.usage.totalTokens) {
-        throw new Error("Invalid embedding data in response");
+        throw new Error('Invalid embedding data in response');
       }
 
       return {
@@ -63,19 +63,19 @@ export class VoyageAdapter extends EmbeddingPort implements RerankPort {
       });
 
       if (!response.data || !response.model || !response.usage) {
-        throw new Error("Invalid response from Voyage AI API");
+        throw new Error('Invalid response from Voyage AI API');
       }
 
       const modelName = response.model;
       const totalTokens = response.usage.totalTokens;
 
       if (totalTokens === undefined || totalTokens === null) {
-        throw new Error("Total tokens not found in response");
+        throw new Error('Total tokens not found in response');
       }
 
       return response.data.map((item: any) => {
         if (!item.embedding) {
-          throw new Error("Invalid embedding data in batch response");
+          throw new Error('Invalid embedding data in batch response');
         }
         return {
           embedding: item.embedding,
@@ -102,12 +102,12 @@ export class VoyageAdapter extends EmbeddingPort implements RerankPort {
       const response = await client.rerank({
         query,
         documents,
-        model: "rerank-2",
+        model: 'rerank-2',
         topK: limit,
       });
 
       if (!response.data) {
-        throw new Error("Invalid response from Voyage AI Rerank API");
+        throw new Error('Invalid response from Voyage AI Rerank API');
       }
 
       return response.data.map((item: any) => ({

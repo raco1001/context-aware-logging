@@ -1,4 +1,4 @@
-import { EmbeddingResult } from "@embeddings/domain";
+import { EmbeddingResult } from '@embeddings/domain';
 
 /**
  * Outbound port for the embedding model (e.g., Voyage AI).

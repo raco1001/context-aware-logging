@@ -1,6 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { SynthesisPort } from "@embeddings/out-ports";
-import { AnalysisResult } from "@embeddings/dtos";
+import { Injectable, Logger } from '@nestjs/common';
+import { SynthesisPort } from '@embeddings/out-ports';
+import { AnalysisResult } from '@embeddings/dtos';
 
 /**
  * QueryReformulationService - Reformulates queries by resolving references.

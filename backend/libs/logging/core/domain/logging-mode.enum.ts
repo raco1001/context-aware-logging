@@ -5,6 +5,6 @@
  * DIRECT: MongoDB에 직접 로깅 (Kafka 장애 시 Fallback)
  */
 export enum LoggingMode {
-  KAFKA = "KAFKA",
-  DIRECT = "DIRECT",
+  KAFKA = 'KAFKA',
+  DIRECT = 'DIRECT',
 }

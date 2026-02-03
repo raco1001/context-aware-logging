@@ -6,7 +6,8 @@ export class AggregationHelper {
 
     if (metadata.startTime || metadata.endTime) {
       match.timestamp = {};
-      if (metadata.startTime) match.timestamp.$gte = new Date(metadata.startTime);
+      if (metadata.startTime)
+        match.timestamp.$gte = new Date(metadata.startTime);
       if (metadata.endTime) match.timestamp.$lte = new Date(metadata.endTime);
     }
 

@@ -40,4 +40,3 @@ Please provide your response in the following JSON format:
   "reasoning": "<brief explanation of verification result>"
 }
 `;
-

@@ -1,4 +1,4 @@
-import { SetMetadata } from "@nestjs/common";
+import { SetMetadata } from '@nestjs/common';
 
 /**
  * Service decorator - Sets the service name for logging purposes.
@@ -14,4 +14,4 @@ import { SetMetadata } from "@nestjs/common";
  * ```
  */
 export const Service = (serviceName: string) =>
-  SetMetadata("service", serviceName);
+  SetMetadata('service', serviceName);

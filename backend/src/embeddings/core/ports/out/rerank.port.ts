@@ -8,4 +8,3 @@ export abstract class RerankPort {
     limit?: number,
   ): Promise<{ index: number; relevance_score: number }[]>;
 }
-

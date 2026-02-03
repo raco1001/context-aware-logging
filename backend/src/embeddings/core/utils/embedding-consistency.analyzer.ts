@@ -1,6 +1,6 @@
 /**
  * Embedding Consistency Analyzer
- * 
+ *
  * Analyzes the consistency between document embeddings and query embeddings
  * to ensure they are in the same vector space and format.
  */
@@ -42,47 +42,54 @@ export function analyzeFormatConsistency(
 
   return {
     outcome: {
-      document: docFields.outcome || "",
-      query: queryFields.outcome || "",
-      match: docFields.outcome === queryFields.outcome || queryFields.outcome === "ANY",
+      document: docFields.outcome || '',
+      query: queryFields.outcome || '',
+      match:
+        docFields.outcome === queryFields.outcome ||
+        queryFields.outcome === 'ANY',
     },
     service: {
-      document: docFields.service || "",
-      query: queryFields.service || "",
-      match: docFields.service === queryFields.service || queryFields.service === "ANY",
+      document: docFields.service || '',
+      query: queryFields.service || '',
+      match:
+        docFields.service === queryFields.service ||
+        queryFields.service === 'ANY',
     },
     route: {
-      document: docFields.route || "",
-      query: queryFields.route || "",
-      match: docFields.route === queryFields.route || queryFields.route === "ANY",
+      document: docFields.route || '',
+      query: queryFields.route || '',
+      match:
+        docFields.route === queryFields.route || queryFields.route === 'ANY',
     },
     error: {
-      document: docFields.error || "",
-      query: queryFields.error || "",
+      document: docFields.error || '',
+      query: queryFields.error || '',
       match:
         docFields.error === queryFields.error ||
-        queryFields.error === "ANY" ||
-        queryFields.error === "NONE",
+        queryFields.error === 'ANY' ||
+        queryFields.error === 'NONE',
     },
     errorMessage: {
-      document: docFields.errorMessage || "",
-      query: queryFields.errorMessage || "",
+      document: docFields.errorMessage || '',
+      query: queryFields.errorMessage || '',
       match:
         docFields.errorMessage === queryFields.errorMessage ||
-        queryFields.errorMessage === "ANY" ||
-        queryFields.errorMessage === "NONE",
+        queryFields.errorMessage === 'ANY' ||
+        queryFields.errorMessage === 'NONE',
     },
     userRole: {
-      document: docFields.userRole || "",
-      query: queryFields.userRole || "",
-      match: docFields.userRole === queryFields.userRole || queryFields.userRole === "ANY",
+      document: docFields.userRole || '',
+      query: queryFields.userRole || '',
+      match:
+        docFields.userRole === queryFields.userRole ||
+        queryFields.userRole === 'ANY',
     },
     latencyBucket: {
-      document: docFields.latencyBucket || "",
-      query: queryFields.latencyBucket || "",
+      document: docFields.latencyBucket || '',
+      query: queryFields.latencyBucket || '',
       match:
         docFields.latencyBucket === queryFields.latencyBucket ||
-        queryFields.latencyBucket === "ANY",
+        queryFields.latencyBucket === 'ANY',
     },
   };
 }
@@ -92,10 +99,10 @@ export function analyzeFormatConsistency(
  */
 function parseSummaryFields(summary: string): Record<string, string> {
   const fields: Record<string, string> = {};
-  const parts = summary.split(", ");
+  const parts = summary.split(', ');
 
   for (const part of parts) {
-    const colonIndex = part.indexOf(":");
+    const colonIndex = part.indexOf(':');
     if (colonIndex > 0) {
       const fieldName = part.substring(0, colonIndex).trim();
       const fieldValue = part.substring(colonIndex + 1).trim();
@@ -109,7 +116,10 @@ function parseSummaryFields(summary: string): Record<string, string> {
 /**
  * Checks if field order matches between document and query formats.
  */
-export function checkFieldOrder(documentSummary: string, queryPreprocessed: string): boolean {
+export function checkFieldOrder(
+  documentSummary: string,
+  queryPreprocessed: string,
+): boolean {
   const docFields = extractFieldOrder(documentSummary);
   const queryFields = extractFieldOrder(queryPreprocessed);
 
@@ -124,11 +134,15 @@ export function checkFieldOrder(documentSummary: string, queryPreprocessed: stri
  * Extracts field order from a structured summary.
  */
 function extractFieldOrder(summary: string): string[] {
-  const parts = summary.split(", ");
-  return parts.map((part) => {
-    const colonIndex = part.indexOf(":");
-    return colonIndex > 0 ? part.substring(0, colonIndex).trim().toLowerCase() : "";
-  }).filter(Boolean);
+  const parts = summary.split(', ');
+  return parts
+    .map((part) => {
+      const colonIndex = part.indexOf(':');
+      return colonIndex > 0
+        ? part.substring(0, colonIndex).trim().toLowerCase()
+        : '';
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -140,7 +154,10 @@ export function generateConsistencyReport(
   documentModel: string | null = null,
   queryModel: string | null = null,
 ): EmbeddingConsistencyReport {
-  const fieldMapping = analyzeFormatConsistency(documentSummary, queryPreprocessed);
+  const fieldMapping = analyzeFormatConsistency(
+    documentSummary,
+    queryPreprocessed,
+  );
   const fieldOrderMatch = checkFieldOrder(documentSummary, queryPreprocessed);
   const modelConsistent = documentModel === queryModel;
 
@@ -156,26 +173,33 @@ export function generateConsistencyReport(
   // Field order check
   if (!fieldOrderMatch) {
     recommendations.push(
-      "⚠️ Field order mismatch: Document and query formats have different field orders. This may affect embedding similarity.",
+      '⚠️ Field order mismatch: Document and query formats have different field orders. This may affect embedding similarity.',
     );
   }
 
   // Field mapping checks
   const mismatchedFields: string[] = [];
   Object.entries(fieldMapping).forEach(([field, analysis]) => {
-    if (!analysis.match && analysis.query !== "ANY" && analysis.query !== "NONE") {
+    if (
+      !analysis.match &&
+      analysis.query !== 'ANY' &&
+      analysis.query !== 'NONE'
+    ) {
       mismatchedFields.push(field);
     }
   });
 
   if (mismatchedFields.length > 0) {
     recommendations.push(
-      `⚠️ Field value mismatches detected in: ${mismatchedFields.join(", ")}. These fields may not match correctly in vector search.`,
+      `⚠️ Field value mismatches detected in: ${mismatchedFields.join(', ')}. These fields may not match correctly in vector search.`,
     );
   }
 
   // Route field specific issue
-  if (fieldMapping.route.query === "ANY" && fieldMapping.route.document !== "") {
+  if (
+    fieldMapping.route.query === 'ANY' &&
+    fieldMapping.route.document !== ''
+  ) {
     recommendations.push(
       "💡 Route field: Query always uses 'ANY' but documents have specific routes. Consider extracting route from query or using route-specific search.",
     );
@@ -183,7 +207,7 @@ export function generateConsistencyReport(
 
   // Success indicators
   if (modelConsistent && fieldOrderMatch && mismatchedFields.length === 0) {
-    recommendations.push("✅ Format consistency looks good!");
+    recommendations.push('✅ Format consistency looks good!');
   }
 
   return {
@@ -201,4 +225,3 @@ export function generateConsistencyReport(
     recommendations,
   };
 }
-

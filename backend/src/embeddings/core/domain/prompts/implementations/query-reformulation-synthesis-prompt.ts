@@ -1,7 +1,7 @@
-import { PromptTemplate } from "../prompt-template";
-import { PromptTemplateRegistry } from "../prompt-template-registry";
-import { AnalysisResult } from "@embeddings/dtos";
-import { QUERY_REFORMULATION_SYNTHESIS_FALLBACK } from "src/embeddings/core/value-objects/fallbacks/prompts";
+import { PromptTemplate } from '../prompt-template';
+import { PromptTemplateRegistry } from '../prompt-template-registry';
+import { AnalysisResult } from '@embeddings/dtos';
+import { QUERY_REFORMULATION_SYNTHESIS_FALLBACK } from 'src/embeddings/core/value-objects/fallbacks/prompts';
 /**
  * QueryReformulationSynthesisPrompt - Query reformulation prompt template
  *
@@ -15,7 +15,7 @@ export class QueryReformulationSynthesisPrompt extends PromptTemplate {
   }
 
   getType(): string {
-    return "query-reformulation";
+    return 'query-reformulation';
   }
 
   build(params: { query: string; historyText: string }): string {
@@ -23,8 +23,8 @@ export class QueryReformulationSynthesisPrompt extends PromptTemplate {
       this.registry.getTemplateString(this.getType()) || this.fallbackTemplate;
 
     return template
-      .replace("{{historyText}}", params.historyText)
-      .replace("{{query}}", params.query);
+      .replace('{{historyText}}', params.historyText)
+      .replace('{{query}}', params.query);
   }
 
   /**
@@ -34,8 +34,8 @@ export class QueryReformulationSynthesisPrompt extends PromptTemplate {
     return history
       .map(
         (h, i) =>
-          `Turn ${i + 1}:\nQ: ${h.question}\nA: ${h.answer.substring(0, 200)}${h.answer.length > 200 ? "..." : ""}`,
+          `Turn ${i + 1}:\nQ: ${h.question}\nA: ${h.answer.substring(0, 200)}${h.answer.length > 200 ? '...' : ''}`,
       )
-      .join("\n\n");
+      .join('\n\n');
   }
 }

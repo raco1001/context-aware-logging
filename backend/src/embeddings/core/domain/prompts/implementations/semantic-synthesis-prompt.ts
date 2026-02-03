@@ -1,7 +1,7 @@
-import { PromptTemplate } from "../prompt-template";
-import { PromptTemplateRegistry } from "../prompt-template-registry";
-import { AnalysisResult } from "@embeddings/dtos";
-import { SEMANTIC_SYNTHESIS_FALLBACK } from "src/embeddings/core/value-objects/fallbacks/prompts";
+import { PromptTemplate } from '../prompt-template';
+import { PromptTemplateRegistry } from '../prompt-template-registry';
+import { AnalysisResult } from '@embeddings/dtos';
+import { SEMANTIC_SYNTHESIS_FALLBACK } from 'src/embeddings/core/value-objects/fallbacks/prompts';
 /**
  * SemanticSynthesisPrompt - Semantic query synthesis prompt template
  *
@@ -15,7 +15,7 @@ export class SemanticSynthesisPrompt extends PromptTemplate {
   }
 
   getType(): string {
-    return "semantic-synthesis";
+    return 'semantic-synthesis';
   }
 
   build(params: {
@@ -29,19 +29,19 @@ export class SemanticSynthesisPrompt extends PromptTemplate {
       this.registry.getTemplateString(this.getType()) || this.fallbackTemplate;
 
     const contextType = params.isAggregation
-      ? "aggregation results and log contexts"
-      : "log contexts";
+      ? 'aggregation results and log contexts'
+      : 'log contexts';
 
     const contextSection = params.isAggregation
-      ? "[Aggregation Results and Context Logs]"
-      : "[Log Contexts]";
+      ? '[Aggregation Results and Context Logs]'
+      : '[Log Contexts]';
 
     let built = template
-      .replace("{{contextType}}", contextType)
-      .replace("{{query}}", params.query)
-      .replace("{{historyText}}", params.historyText)
-      .replace("{{contextSection}}", contextSection)
-      .replace("{{contextText}}", params.contextText);
+      .replace('{{contextType}}', contextType)
+      .replace('{{query}}', params.query)
+      .replace('{{historyText}}', params.historyText)
+      .replace('{{contextSection}}', contextSection)
+      .replace('{{contextText}}', params.contextText);
 
     if (params.detectedLanguage) {
       built += `\n\n[STRICT RULE: ANSWER IN ${params.detectedLanguage} ONLY]`;
@@ -54,7 +54,7 @@ export class SemanticSynthesisPrompt extends PromptTemplate {
    * Converts history to a format suitable for use in a prompt.
    */
   static formatHistory(history: AnalysisResult[]): string {
-    if (history.length === 0) return "";
+    if (history.length === 0) return '';
 
     const now = new Date();
 
@@ -64,11 +64,11 @@ export class SemanticSynthesisPrompt extends PromptTemplate {
         const timeStr =
           createdAt && !isNaN(createdAt.getTime())
             ? ` [${Math.round((now.getTime() - createdAt.getTime()) / 60000)} mins ago]`
-            : "";
-        const turnLabel = i === history.length - 1 ? " (LAST TURN)" : "";
-        return `Turn ${i + 1}${timeStr}${turnLabel}:\nQ: ${h.question}\nA: ${h.answer.substring(0, 200)}${h.answer.length > 200 ? "..." : ""}`;
+            : '';
+        const turnLabel = i === history.length - 1 ? ' (LAST TURN)' : '';
+        return `Turn ${i + 1}${timeStr}${turnLabel}:\nQ: ${h.question}\nA: ${h.answer.substring(0, 200)}${h.answer.length > 200 ? '...' : ''}`;
       })
-      .join("\n\n")}`;
+      .join('\n\n')}`;
   }
 
   /**
@@ -77,7 +77,7 @@ export class SemanticSynthesisPrompt extends PromptTemplate {
   static formatContexts(contexts: any[]): string {
     return contexts
       .map((ctx, i) => `[Document ${i + 1}]\n${JSON.stringify(ctx, null, 2)}`)
-      .join("\n\n");
+      .join('\n\n');
   }
 
   /**
@@ -89,7 +89,7 @@ export class SemanticSynthesisPrompt extends PromptTemplate {
   }): string {
     const aggregationText = params.aggregationResults
       ? `[Aggregation Results]\n${JSON.stringify(params.aggregationResults, null, 2)}`
-      : "";
+      : '';
 
     const contextLogsText = params.contextLogs
       ? params.contextLogs
@@ -97,9 +97,9 @@ export class SemanticSynthesisPrompt extends PromptTemplate {
             (ctx, i) =>
               `[Context Log ${i + 1}]\n${JSON.stringify(ctx, null, 2)}`,
           )
-          .join("\n\n")
-      : "";
+          .join('\n\n')
+      : '';
 
-    return [aggregationText, contextLogsText].filter(Boolean).join("\n\n");
+    return [aggregationText, contextLogsText].filter(Boolean).join('\n\n');
   }
 }

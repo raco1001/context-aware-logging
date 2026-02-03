@@ -1,6 +1,6 @@
-import { PromptTemplate } from "../prompt-template";
-import { PromptTemplateRegistry } from "../prompt-template-registry";
-import { QUERY_METADATA_SYNTHESIS_FALLBACK } from "src/embeddings/core/value-objects/fallbacks/prompts";
+import { PromptTemplate } from '../prompt-template';
+import { PromptTemplateRegistry } from '../prompt-template-registry';
+import { QUERY_METADATA_SYNTHESIS_FALLBACK } from 'src/embeddings/core/value-objects/fallbacks/prompts';
 /**
  * QueryMetadataSynthesisPrompt - Query metadata extraction prompt template
  *
@@ -14,7 +14,7 @@ export class QueryMetadataSynthesisPrompt extends PromptTemplate {
   }
 
   getType(): string {
-    return "query-metadata-extraction";
+    return 'query-metadata-extraction';
   }
 
   build(params: { query: string; currentTime?: Date }): string {
@@ -23,7 +23,7 @@ export class QueryMetadataSynthesisPrompt extends PromptTemplate {
 
     const currentTime = params.currentTime || new Date();
     return template
-      .replace("{{currentTime}}", currentTime.toISOString())
-      .replace("{{query}}", params.query);
+      .replace('{{currentTime}}', currentTime.toISOString())
+      .replace('{{query}}', params.query);
   }
 }

@@ -14,4 +14,3 @@ Your task is to transform a natural language query into a hypothetical log-style
 
 [Transformed Narrative]
 `;
-

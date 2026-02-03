@@ -1,10 +1,10 @@
-import { Injectable, Logger, Optional, Inject } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { LoggerPort } from "@logging/out-ports";
-import { WideEvent, LoggingContext } from "@logging/domain";
-import { LoggingMode } from "../../core/domain/logging-mode.enum";
-import { MqProducerPort } from "@logging/out-ports";
-import { LoggingModeService } from "@logging/service";
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { LoggerPort } from '@logging/out-ports';
+import { WideEvent, LoggingContext } from '@logging/domain';
+import { LoggingMode } from '../../core/domain/logging-mode.enum';
+import { MqProducerPort } from '@logging/out-ports';
+import { LoggingModeService } from '@logging/service';
 
 /**
  * KafkaLogger - LoggerPort wrapper that publishes to Kafka instead of directly logging.
@@ -33,19 +33,19 @@ export class KafkaLogger extends LoggerPort {
     private readonly configService: ConfigService,
   ) {
     super();
-    this.mqEnabled = this.configService.get<string>("MQ_ENABLED") === "true";
+    this.mqEnabled = this.configService.get<string>('MQ_ENABLED') === 'true';
     this.fallbackLogger = fallbackLogger;
 
     if (!this.fallbackLogger) {
       this.logger.warn(
-        "No fallback logger provided. Logs will be lost if MQ fails.",
+        'No fallback logger provided. Logs will be lost if MQ fails.',
       );
     }
   }
 
   async log(
     event: WideEvent,
-    _metadata: LoggingContext["_metadata"],
+    _metadata: LoggingContext['_metadata'],
     _summary: string,
   ): Promise<void> {
     // If MQ is disabled, use the fallback logger
@@ -54,7 +54,7 @@ export class KafkaLogger extends LoggerPort {
         return this.fallbackLogger.log(event, _metadata, _summary);
       }
       this.logger.warn(
-        "MQ disabled and no fallback logger available. Log dropped.",
+        'MQ disabled and no fallback logger available. Log dropped.',
       );
       return;
     }
@@ -67,21 +67,21 @@ export class KafkaLogger extends LoggerPort {
       if (this.fallbackLogger) {
         return this.fallbackLogger.log(event, _metadata, _summary);
       }
-      this.logger.warn("DIRECT mode but no fallback logger. Log lost.");
+      this.logger.warn('DIRECT mode but no fallback logger. Log lost.');
       return;
     }
 
     // KAFKA MODE: Try to use the producer
     if (!this.mqProducer.isConnected()) {
       // If the producer is not connected, change the mode
-      this.logger.warn("Producer not connected. Switching to DIRECT mode...");
+      this.logger.warn('Producer not connected. Switching to DIRECT mode...');
       this.loggingModeService.setMode(LoggingMode.DIRECT);
 
       if (this.fallbackLogger) {
         return this.fallbackLogger.log(event, _metadata, _summary);
       }
       this.logger.warn(
-        "MQ producer not connected and no fallback logger available. Log lost.",
+        'MQ producer not connected and no fallback logger available. Log lost.',
       );
       return;
     }

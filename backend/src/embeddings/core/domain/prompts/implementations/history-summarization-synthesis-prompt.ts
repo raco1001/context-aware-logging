@@ -1,7 +1,7 @@
-import { PromptTemplate } from "../prompt-template";
-import { PromptTemplateRegistry } from "../prompt-template-registry";
-import { AnalysisResult } from "@embeddings/dtos";
-import { HISTORY_SUMMARIZATION_FALLBACK } from "@embeddings/value-objects/fallbacks/prompts";
+import { PromptTemplate } from '../prompt-template';
+import { PromptTemplateRegistry } from '../prompt-template-registry';
+import { AnalysisResult } from '@embeddings/dtos';
+import { HISTORY_SUMMARIZATION_FALLBACK } from '@embeddings/value-objects/fallbacks/prompts';
 /**
  * HistorySummarizationSynthesisPrompt - History summarization prompt template
  *
@@ -15,14 +15,14 @@ export class HistorySummarizationSynthesisPrompt extends PromptTemplate {
   }
 
   getType(): string {
-    return "history-summarization";
+    return 'history-summarization';
   }
 
   build(params: { historyText: string }): string {
     const template =
       this.registry.getTemplateString(this.getType()) || this.fallbackTemplate;
 
-    return template.replace("{{historyText}}", params.historyText);
+    return template.replace('{{historyText}}', params.historyText);
   }
 
   /**
@@ -32,9 +32,9 @@ export class HistorySummarizationSynthesisPrompt extends PromptTemplate {
     return history
       .map(
         (h, i) =>
-          `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer.substring(0, 150)}${h.answer.length > 150 ? "..." : ""}`,
+          `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer.substring(0, 150)}${h.answer.length > 150 ? '...' : ''}`,
       )
-      .join("\n\n");
+      .join('\n\n');
   }
 
   /**
@@ -47,26 +47,26 @@ export class HistorySummarizationSynthesisPrompt extends PromptTemplate {
     for (const h of history) {
       // Extract potential topics from questions
       if (
-        h.question.includes("에러") ||
-        h.question.toLowerCase().includes("error")
+        h.question.includes('에러') ||
+        h.question.toLowerCase().includes('error')
       ) {
-        errors.add("errors");
+        errors.add('errors');
       }
       if (
-        h.question.includes("서비스") ||
-        h.question.toLowerCase().includes("service")
+        h.question.includes('서비스') ||
+        h.question.toLowerCase().includes('service')
       ) {
-        topics.add("services");
+        topics.add('services');
       }
       if (
-        h.question.includes("성능") ||
-        h.question.toLowerCase().includes("performance")
+        h.question.includes('성능') ||
+        h.question.toLowerCase().includes('performance')
       ) {
-        topics.add("performance");
+        topics.add('performance');
       }
     }
 
-    const topicList = Array.from(topics).join(", ");
-    return `Previous conversation covered ${history.length} interactions about ${topicList || "various topics"}.`;
+    const topicList = Array.from(topics).join(', ');
+    return `Previous conversation covered ${history.length} interactions about ${topicList || 'various topics'}.`;
   }
 }

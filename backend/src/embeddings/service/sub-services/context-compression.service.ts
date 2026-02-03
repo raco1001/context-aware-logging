@@ -1,7 +1,7 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { SynthesisPort } from "@embeddings/out-ports";
-import { AnalysisResult } from "@embeddings/dtos";
-import { AnalysisIntent } from "@embeddings/value-objects/filter";
+import { Injectable, Logger } from '@nestjs/common';
+import { SynthesisPort } from '@embeddings/out-ports';
+import { AnalysisResult } from '@embeddings/dtos';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
 
 /**
  * ContextCompressionService - Compresses long chat history to manage context window.
@@ -50,12 +50,12 @@ export class ContextCompressionService {
 
     // Create summary result
     const summaryResult: AnalysisResult = {
-      question: "[Previous conversation summary]",
+      question: '[Previous conversation summary]',
       answer: summary,
       intent: AnalysisIntent.UNKNOWN,
       sources: this.extractSourcesFromHistory(old),
       confidence: 0.8,
-      sessionId: recent[0]?.sessionId || "",
+      sessionId: recent[0]?.sessionId || '',
       createdAt: new Date(),
     };
 
@@ -70,7 +70,7 @@ export class ContextCompressionService {
     oldHistory: AnalysisResult[],
   ): Promise<string> {
     if (oldHistory.length === 0) {
-      return "";
+      return '';
     }
 
     try {

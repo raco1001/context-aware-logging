@@ -34,7 +34,7 @@ export class PromptInstance {
     templateType: string,
     promptText: string,
     parameters: Record<string, any>,
-    metadata?: PromptInstance["metadata"],
+    metadata?: PromptInstance['metadata'],
   ): PromptInstance {
     return new PromptInstance(
       crypto.randomUUID(),

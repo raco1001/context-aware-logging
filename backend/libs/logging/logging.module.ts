@@ -1,12 +1,13 @@
-import { Module, Global, Provider, DynamicModule } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import * as dotenv from "dotenv";
+import { Module, Provider, DynamicModule } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as dotenv from 'dotenv';
 import {
   LoggingService,
   ContextService,
   MqConsumerService,
   LoggingModeService,
-} from "libs/logging/service";
+  SAMPLING_POLICY,
+} from 'libs/logging/service';
 import {
   MongoLogger,
   MongoConnectionClient,
@@ -15,12 +16,12 @@ import {
   KafkaProducer,
   KafkaLogger,
   FileLogger,
-} from "@logging/infrastructure";
-import { LoggerPort } from "@logging/out-ports";
-import { MqProducerPort } from "@logging/out-ports";
-import { LoggingUseCase } from "@logging/in-ports";
-import { LoggingInterceptor } from "@logging/presentation";
-import { SamplingPolicy } from "@logging/domain";
+} from '@logging/infrastructure';
+import { LoggerPort } from '@logging/out-ports';
+import { MqProducerPort } from '@logging/out-ports';
+import { LoggingUseCase } from '@logging/in-ports';
+import { LoggingInterceptor } from '@logging/presentation';
+import { SamplingPolicy, FinalizeMetrics } from '@logging/domain';
 
 // Load environment variables immediately to support dynamic module registration
 dotenv.config();
@@ -38,11 +39,16 @@ export class LoggingModule {
    * Uses process.env.STORAGE_TYPE to determine which infrastructure to load.
    */
   static forRoot(): DynamicModule {
-    const storageType = process.env.STORAGE_TYPE || "mongodb";
+    const storageType = process.env.STORAGE_TYPE || 'mongodb';
 
     const providers: Provider[] = [
       ContextService,
-      SamplingPolicy,
+      {
+        // SamplingPolicy is a pure domain object - created via factory
+        provide: SAMPLING_POLICY,
+        useFactory: () => SamplingPolicy.fromEnv(process.env),
+      },
+      FinalizeMetrics,
       {
         provide: LoggingUseCase,
         useClass: LoggingService,
@@ -56,26 +62,27 @@ export class LoggingModule {
       LoggingService,
       ContextService,
       LoggingInterceptor,
+      FinalizeMetrics,
     ];
 
-    if (storageType === "file") {
-      console.log("########## File storage type is enabled ##########");
+    if (storageType === 'file') {
+      console.log('########## File storage type is enabled ##########');
       providers.push(FileLogger);
       providers.push({
         provide: LoggerPort,
         useClass: FileLogger,
       });
       exports.push(LoggerPort);
-    } else if (storageType === "mongodb") {
-      console.log("########## MongoDB storage type is enabled ##########");
+    } else if (storageType === 'mongodb') {
+      console.log('########## MongoDB storage type is enabled ##########');
       providers.push(MongoConnectionClient, MongoLogger);
       providers.push({
         provide: LoggerPort,
         useClass: MongoLogger,
       });
       exports.push(LoggerPort);
-    } else if (storageType === "kafka") {
-      console.log("########## Kafka storage type is enabled ##########");
+    } else if (storageType === 'kafka') {
+      console.log('########## Kafka storage type is enabled ##########');
       providers.push(
         MongoConnectionClient,
         MongoLogger,

@@ -1,9 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
-import { promises as fs } from "fs";
-import { join, dirname } from "path";
-import { ConfigService } from "@nestjs/config";
-import { LoggerPort } from "@logging/out-ports";
-import { WideEvent } from "@logging/domain";
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import { join, dirname } from 'path';
+import { ConfigService } from '@nestjs/config';
+import { LoggerPort } from '@logging/out-ports';
+import { WideEvent } from '@logging/domain';
 
 /**
  * FileLogger - Infrastructure layer implementation of Logger interface.
@@ -20,15 +20,15 @@ export class FileLogger
 
   constructor(private readonly configService: ConfigService) {
     super();
-    const projectRoot = this.configService.get<string>("paths.projectRoot");
+    const projectRoot = this.configService.get<string>('paths.projectRoot');
 
     if (!projectRoot) {
-      throw new Error("Project root path not configured");
+      throw new Error('Project root path not configured');
     }
 
     this.logFilePath =
-      this.configService.get<string>("LOG_FILE_PATH") ||
-      join(projectRoot, "logs", "app.log");
+      this.configService.get<string>('LOG_FILE_PATH') ||
+      join(projectRoot, 'logs', 'app.log');
   }
 
   async onModuleInit(): Promise<void> {
@@ -38,7 +38,7 @@ export class FileLogger
     } catch {}
 
     try {
-      this.logFileHandle = await fs.open(this.logFilePath, "a");
+      this.logFileHandle = await fs.open(this.logFilePath, 'a');
     } catch {
       this.logFileHandle = null;
     }
@@ -57,9 +57,9 @@ export class FileLogger
    */
   async log(event: WideEvent): Promise<void> {
     try {
-      const jsonLine = JSON.stringify(event) + "\n";
+      const jsonLine = JSON.stringify(event) + '\n';
 
-      await fs.appendFile(this.logFilePath, jsonLine, "utf8");
+      await fs.appendFile(this.logFilePath, jsonLine, 'utf8');
     } catch {
       // Future:Silently fail and emit to a fallback logger or metrics.
     }

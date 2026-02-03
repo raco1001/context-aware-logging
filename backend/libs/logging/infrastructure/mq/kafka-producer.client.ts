@@ -3,10 +3,10 @@ import {
   Logger,
   OnModuleInit,
   OnModuleDestroy,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { Kafka, Producer, logLevel } from "kafkajs";
-import * as net from "net";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Kafka, Producer, logLevel } from 'kafkajs';
+import * as net from 'net';
 
 /**
  * KafkaProducerClient - Infrastructure client for initializing and managing Kafka Producer.
@@ -28,10 +28,10 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
 
   constructor(private readonly configService: ConfigService) {
     this.broker =
-      this.configService.get<string>("MQ_BROKER_ADDRESS") || "localhost:9092";
+      this.configService.get<string>('MQ_BROKER_ADDRESS') || 'localhost:9092';
 
     this.kafka = new Kafka({
-      clientId: "logging-service",
+      clientId: 'logging-service',
       brokers: [this.broker],
       logLevel: logLevel.ERROR,
     });
@@ -49,11 +49,11 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
     const { CONNECT, DISCONNECT } = this.producer.events;
     this.producer.on(CONNECT, () => {
       this.isConnected = true;
-      this.logger.log("Kafka Producer connected");
+      this.logger.log('Kafka Producer connected');
     });
     this.producer.on(DISCONNECT, () => {
       this.isConnected = false;
-      this.logger.warn("Kafka Producer disconnected");
+      this.logger.warn('Kafka Producer disconnected');
       this.startWatchdog();
     });
 
@@ -70,7 +70,7 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
     try {
       const isAvailable = await this.checkBrokerAvailability();
       if (!isAvailable) {
-        throw new Error("Broker not reachable via TCP");
+        throw new Error('Broker not reachable via TCP');
       }
       await this.connect();
     } catch (error) {
@@ -102,7 +102,7 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
 
           if (this.consecutiveSuccessCount >= this.STABILITY_THRESHOLD) {
             this.logger.log(
-              "Watchdog: Kafka Broker is stable. Reconnecting...",
+              'Watchdog: Kafka Broker is stable. Reconnecting...',
             );
             this.consecutiveSuccessCount = 0;
             await this.connect();
@@ -110,7 +110,7 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
           }
         } else {
           this.consecutiveSuccessCount = 0;
-          this.logger.debug("Watchdog: Kafka Broker is still offline.");
+          this.logger.debug('Watchdog: Kafka Broker is still offline.');
         }
       } catch (error) {
         this.consecutiveSuccessCount = 0;
@@ -156,11 +156,11 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
 
     try {
       this.logger.log(
-        "Graceful shutdown: Disconnecting Kafka Producer (flushing pending messages)...",
+        'Graceful shutdown: Disconnecting Kafka Producer (flushing pending messages)...',
       );
       await this.producer.disconnect();
       this.isConnected = false;
-      this.logger.log("Disconnected from Kafka successfully");
+      this.logger.log('Disconnected from Kafka successfully');
     } catch (error) {
       this.logger.error(
         `Error disconnecting from Kafka: ${error.message}`,
@@ -175,22 +175,22 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
    */
   async checkBrokerAvailability(): Promise<boolean> {
     return new Promise((resolve) => {
-      const [host, portStr] = this.broker.split(":");
-      const port = parseInt(portStr || "9092", 10);
+      const [host, portStr] = this.broker.split(':');
+      const port = parseInt(portStr || '9092', 10);
 
       const socket = net.createConnection({ host, port, timeout: 1000 });
 
-      socket.on("connect", () => {
+      socket.on('connect', () => {
         socket.destroy();
         resolve(true);
       });
 
-      socket.on("error", () => {
+      socket.on('error', () => {
         socket.destroy();
         resolve(false);
       });
 
-      socket.on("timeout", () => {
+      socket.on('timeout', () => {
         socket.destroy();
         resolve(false);
       });
@@ -205,7 +205,7 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
    */
   getProducer(): Producer {
     if (!this.isConnected) {
-      throw new Error("Kafka producer is not connected");
+      throw new Error('Kafka producer is not connected');
     }
     return this.producer;
   }
@@ -226,7 +226,7 @@ export class KafkaProducerClient implements OnModuleInit, OnModuleDestroy {
     if (!isAvailable && this.isConnected) {
       this.isConnected = false;
       this.logger.warn(
-        "Kafka Producer status updated to disconnected after health check",
+        'Kafka Producer status updated to disconnected after health check',
       );
       this.startWatchdog();
     }

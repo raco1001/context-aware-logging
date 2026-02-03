@@ -1,5 +1,5 @@
-import { EmbeddingStatus } from "@logging/value-objects";
-import { WideEvent } from "@logging/domain";
+import { EmbeddingStatus } from '@logging/value-objects';
+import { WideEvent } from '@logging/domain';
 
 /**
  * Result of an embedding operation.

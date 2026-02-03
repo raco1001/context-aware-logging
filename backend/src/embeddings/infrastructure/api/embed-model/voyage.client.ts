@@ -1,6 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { VoyageAIClient } from "voyageai";
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { VoyageAIClient } from 'voyageai';
 
 /**
  * VoyageClient - Infrastructure client for initializing and managing the Voyage AI SDK client.
@@ -14,18 +14,18 @@ export class VoyageClient {
   private readonly model: string;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>("EMBEDDING_MODEL_KEY");
+    const apiKey = this.configService.get<string>('EMBEDDING_MODEL_KEY');
     this.model =
-      this.configService.get<string>("EMBEDDING_MODEL") || "voyage-3-lite";
+      this.configService.get<string>('EMBEDDING_MODEL') || 'voyage-3-lite';
 
     if (!apiKey) {
       this.logger.warn(
-        "EMBEDDING_MODEL_KEY is not defined. Embedding operations will fail.",
+        'EMBEDDING_MODEL_KEY is not defined. Embedding operations will fail.',
       );
     }
 
     this.client = new VoyageAIClient({
-      apiKey: apiKey || "",
+      apiKey: apiKey || '',
     });
 
     this.logger.log(`Voyage AI client initialized with model: ${this.model}`);

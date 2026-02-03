@@ -3,7 +3,6 @@ import { PaymentsServicePort } from "@payments/in-ports";
 import { PaymentsOutPort } from "@payments/out-ports";
 import { PaymentRequest, PaymentResult } from "@payments/dtos";
 import { PaymentStatusVO, PaymentStatusCode } from "@payments/value-objects";
-import { LoggingService } from "@logging/service";
 
 /**
  * Parsed error structure from adapter exceptions.
@@ -20,8 +19,11 @@ interface AdapterError {
  *
  * Responsibilities:
  * - Coordinate the payment processing steps
- * - Update logging context with appropriate service at each step
+ * - Return results with all metadata for logging (via @LogResponseMeta)
  * - Pass through adapter results without modification
+ *
+ * Logging is handled declaratively by LoggingInterceptor using decorators.
+ * This service returns all relevant metadata in PaymentResult for extraction.
  *
  * All status codes, messages, and business logic are delegated to:
  * - PaymentStatusVO: Status definitions and outcome determination
@@ -29,10 +31,7 @@ interface AdapterError {
  */
 @Injectable()
 export class PaymentsService extends PaymentsServicePort {
-  constructor(
-    private readonly outPort: PaymentsOutPort,
-    private readonly loggingService: LoggingService,
-  ) {
+  constructor(private readonly outPort: PaymentsOutPort) {
     super();
   }
 
@@ -52,13 +51,14 @@ export class PaymentsService extends PaymentsServicePort {
         success: false,
         errorCode: status.code,
         errorMessage: status.message,
+        errorService: "payments",
       };
     }
 
     // Step 2: Payment Gateway Call (service: paymentGateway)
-    this.loggingService.setService("paymentGateway");
-
     let transactionId: string;
+    let gatewayProcessingTimeMs: number | undefined;
+
     try {
       const gatewayRes = await this.outPort.callGateway(
         request.userId,
@@ -66,27 +66,18 @@ export class PaymentsService extends PaymentsServicePort {
       );
 
       transactionId = gatewayRes.transactionId!;
-
-      if (gatewayRes.processingTimeMs) {
-        this.loggingService.addMetadata({
-          gatewayProcessingTimeMs: gatewayRes.processingTimeMs,
-        });
-      }
+      gatewayProcessingTimeMs = gatewayRes.processingTimeMs;
     } catch (e) {
       const error = this.parseAdapterError(e as Error);
-      if (error.service) {
-        this.loggingService.setService(error.service);
-      }
       return {
         success: false,
         errorCode: error.code,
         errorMessage: error.message,
+        errorService: error.service || "paymentGateway",
       };
     }
 
     // Step 3: Order Confirmation (service: orders)
-    this.loggingService.setService("orders");
-
     try {
       const orderRes = await this.outPort.confirmOrder(
         request.userId,
@@ -94,27 +85,21 @@ export class PaymentsService extends PaymentsServicePort {
         request.amount,
       );
 
-      this.loggingService.addMetadata({
-        orderId: orderRes.orderId,
-        confirmedAt: orderRes.confirmedAt,
-      });
-
-      this.loggingService.setService("payments");
-
       return {
         success: true,
         transactionId,
         orderId: orderRes.orderId,
+        gatewayProcessingTimeMs,
+        confirmedAt: orderRes.confirmedAt,
       };
     } catch (e) {
       const error = this.parseAdapterError(e as Error);
-      if (error.service) {
-        this.loggingService.setService(error.service);
-      }
       return {
         success: false,
         errorCode: error.code,
         errorMessage: error.message,
+        errorService: error.service || "orders",
+        gatewayProcessingTimeMs,
       };
     }
   }

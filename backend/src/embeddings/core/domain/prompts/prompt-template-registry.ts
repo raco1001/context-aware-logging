@@ -3,11 +3,11 @@ import {
   Logger,
   OnModuleInit,
   OnModuleDestroy,
-} from "@nestjs/common";
-import { readFileSync, existsSync, watch } from "fs";
-import { join } from "path";
-import { ConfigService } from "@nestjs/config";
-import { PROMPT_TEMPLATE_FILES_MARKDOWN } from "@embeddings/value-objects/constants";
+} from '@nestjs/common';
+import { readFileSync, existsSync, watch } from 'fs';
+import { join } from 'path';
+import { ConfigService } from '@nestjs/config';
+import { PROMPT_TEMPLATE_FILES_MARKDOWN } from '@embeddings/value-objects/constants';
 
 /**
  * PromptTemplateConfig - Configuration structure for prompt templates
@@ -38,15 +38,15 @@ export class PromptTemplateRegistry implements OnModuleInit, OnModuleDestroy {
   private fileWatchers: Array<{ close: () => void }> = [];
 
   constructor(private readonly configService: ConfigService) {
-    const projectRoot = this.configService.get<string>("paths.projectRoot");
+    const projectRoot = this.configService.get<string>('paths.projectRoot');
     if (!projectRoot) {
-      throw new Error("Project root path not configured");
+      throw new Error('Project root path not configured');
     }
-    this.promptsDir = join(projectRoot, "prompts");
+    this.promptsDir = join(projectRoot, 'prompts');
   }
 
   async onModuleInit(): Promise<void> {
-    this.logger.log("Loading prompt templates from Markdown files...");
+    this.logger.log('Loading prompt templates from Markdown files...');
     await this.loadTemplates();
 
     const loadedCount = this.templates.size;
@@ -54,9 +54,9 @@ export class PromptTemplateRegistry implements OnModuleInit, OnModuleDestroy {
       `Loaded ${loadedCount} prompt template(s) into memory from ${this.promptsDir}`,
     );
 
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== 'production') {
       this.enableHotReload();
-      this.logger.debug("Hot reload enabled for prompt templates");
+      this.logger.debug('Hot reload enabled for prompt templates');
     }
   }
 
@@ -79,19 +79,19 @@ export class PromptTemplateRegistry implements OnModuleInit, OnModuleDestroy {
     const body = match[2].trim();
 
     const frontmatter: Record<string, string> = {};
-    const lines = frontmatterText.split("\n");
+    const lines = frontmatterText.split('\n');
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
+      if (!trimmed || trimmed.startsWith('#')) continue;
 
-      const colonIndex = trimmed.indexOf(":");
+      const colonIndex = trimmed.indexOf(':');
       if (colonIndex === -1) continue;
 
       const key = trimmed.substring(0, colonIndex).trim();
       const value = trimmed
         .substring(colonIndex + 1)
         .trim()
-        .replace(/^["']|["']$/g, "");
+        .replace(/^["']|["']$/g, '');
       frontmatter[key] = value;
     }
 
@@ -114,7 +114,7 @@ export class PromptTemplateRegistry implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
-        const content = readFileSync(filePath, "utf-8");
+        const content = readFileSync(filePath, 'utf-8');
         const { frontmatter, body } = this.parseFrontmatter(content);
 
         if (!frontmatter.type || !body) {
@@ -125,13 +125,13 @@ export class PromptTemplateRegistry implements OnModuleInit, OnModuleDestroy {
         }
 
         this.templates.set(frontmatter.type, {
-          version: frontmatter.version || "1.0.0",
+          version: frontmatter.version || '1.0.0',
           type: frontmatter.type,
           template: body,
         });
 
         this.logger.debug(
-          `Loaded template: ${frontmatter.type} (v${frontmatter.version || "unknown"}) from ${file}`,
+          `Loaded template: ${frontmatter.type} (v${frontmatter.version || 'unknown'}) from ${file}`,
         );
       } catch (error) {
         this.logger.error(`Failed to load template ${file}: ${error.message}`);
@@ -153,7 +153,7 @@ export class PromptTemplateRegistry implements OnModuleInit, OnModuleDestroy {
 
       try {
         const watcher = watch(filePath, { persistent: false }, (eventType) => {
-          if (eventType === "change") {
+          if (eventType === 'change') {
             this.logger.log(`Template file changed: ${file}. Reloading...`);
             this.loadTemplates();
             this.logger.log(`Template ${file} reloaded successfully`);
@@ -204,7 +204,7 @@ export class PromptTemplateRegistry implements OnModuleInit, OnModuleDestroy {
    * Reloads templates from files (useful for hot reload or manual refresh)
    */
   async reload(): Promise<void> {
-    this.logger.log("Reloading prompt templates...");
+    this.logger.log('Reloading prompt templates...');
     this.templates.clear();
     await this.loadTemplates();
     this.logger.log(`Reloaded ${this.templates.size} prompt template(s)`);

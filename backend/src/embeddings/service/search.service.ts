@@ -1,50 +1,60 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { SearchUseCase } from "@embeddings/in-ports";
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { SearchUseCase } from '@embeddings/in-ports';
+import { SynthesisPort } from '@embeddings/out-ports';
+import { AnalysisResult } from '@embeddings/dtos';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
 import {
-  EmbeddingPort,
-  RerankPort,
-  SynthesisPort,
-  LogStoragePort,
-} from "@embeddings/out-ports";
-import { AnalysisResult } from "@embeddings/dtos";
-import { AnalysisIntent } from "@embeddings/value-objects/filter";
-import { QueryMetadata } from "@embeddings/dtos";
-import {
-  STATISTIC_KEYWORDS,
-  SEMANTIC_KEYWORDS,
-  AGGREGATION_KEYWORDS,
-  CONVERSATIONAL_KEYWORDS,
-} from "@embeddings/value-objects/filter";
-import {
-  QueryPreprocessorService,
-  AggregationService,
   SessionCacheService,
   QueryReformulationService,
   ContextCompressionService,
-  SemanticCacheService,
-} from "@embeddings/service/sub-services";
+} from '@embeddings/service/sub-services';
+import { QueryStrategy, QueryContext, QUERY_STRATEGIES } from './strategies';
 
 /**
- * SearchService - Service for search operations.
- * Handles RAG queries and chat history retrieval.
+ * SearchService - Orchestrates query handling using Strategy Pattern.
+ *
+ * Responsibilities:
+ * - Prepare query context (history, reformulation, metadata)
+ * - Select appropriate strategy based on query intent
+ * - Delegate execution to the selected strategy
+ *
+ * This design follows Open/Closed Principle:
+ * - New intent types can be added by creating new strategy classes
+ * - No modification to SearchService required for new intents
  */
 @Injectable()
 export class SearchService extends SearchUseCase {
   private readonly logger = new Logger(SearchService.name);
 
+  /** Strategies sorted by priority (highest first) */
+  private readonly sortedStrategies: QueryStrategy[];
+
+  /** Default strategy for unknown intents */
+  private readonly defaultStrategy: QueryStrategy;
+
   constructor(
-    private readonly embeddingPort: EmbeddingPort,
-    private readonly rerankPort: RerankPort,
+    @Inject(QUERY_STRATEGIES)
+    private readonly strategies: QueryStrategy[],
     private readonly synthesisPort: SynthesisPort,
-    private readonly logStoragePort: LogStoragePort,
-    private readonly queryPreprocessor: QueryPreprocessorService,
-    private readonly aggregation: AggregationService,
     private readonly sessionCache: SessionCacheService,
     private readonly queryReformulation: QueryReformulationService,
     private readonly contextCompression: ContextCompressionService,
-    private readonly semanticCache: SemanticCacheService,
   ) {
     super();
+
+    // Sort strategies by priority (highest first)
+    this.sortedStrategies = [...strategies].sort(
+      (a, b) => b.priority - a.priority,
+    );
+
+    // Find semantic strategy as default (for UNKNOWN intent)
+    this.defaultStrategy =
+      strategies.find((s) => s.intent === AnalysisIntent.SEMANTIC) ||
+      strategies[0];
+
+    this.logger.log(
+      `Initialized with ${strategies.length} strategies: ${strategies.map((s) => s.intent).join(', ')}`,
+    );
   }
 
   /**
@@ -55,337 +65,172 @@ export class SearchService extends SearchUseCase {
    */
   async ask(query: string, sessionId?: string): Promise<AnalysisResult> {
     this.logger.log(
-      `Processing RAG query: "${query}" (Session: ${sessionId || "none"})`,
+      `Processing RAG query: "${query}" (Session: ${sessionId || 'none'})`,
     );
 
     try {
-      let history: AnalysisResult[] = [];
-      if (sessionId) {
-        history = await this.sessionCache.getHistory(sessionId);
-        this.logger.debug(
-          `Retrieved ${history.length} history turns for session ${sessionId}`,
-        );
-      }
+      // 1. Load conversation history
+      const history = await this.loadHistory(sessionId);
 
-      // 1. Anchor the original language
-      const originalLanguage = this.synthesisPort.detectLanguage(query);
+      // 2. Select strategy based on query content
+      const strategy = this.selectStrategy(query, history);
+      this.logger.log(`Selected strategy: ${strategy.intent}`);
 
-      const intent = this.classifyIntent(query);
-      this.logger.log(`Detected intent: ${intent}`);
-
-      if (intent === AnalysisIntent.CONVERSATIONAL) {
-        this.logger.log(`Handling conversational query: "${query}"`);
-
-        // If history is empty, provide a default response
-        if (history.length === 0) {
-          const noHistoryAnswer =
-            originalLanguage === "Korean"
-              ? "이 세션에서 이전에 나눈 대화 내용이 없습니다."
-              : "I don't have any previous conversation records in this session.";
-
-          return {
-            question: query,
-            intent,
-            answer: noHistoryAnswer,
-            sources: [],
-            confidence: 1,
-            sessionId,
-            createdAt: new Date(),
-          };
-        }
-
-        // For conversational intent, use the most recent 10 raw messages for accuracy
-        // No need to compress as we are only looking at metadata about the conversation itself.
-        const recentHistory = history.slice(-10);
-
-        const { answer, confidence } = await this.synthesisPort.synthesize(
+      // 3. Handle conversational queries early (no reformulation needed)
+      if (strategy.intent === AnalysisIntent.CONVERSATIONAL) {
+        const context = this.buildConversationalContext(
           query,
-          [],
-          recentHistory,
-          originalLanguage,
-        );
-
-        const result: AnalysisResult = {
-          question: query,
-          intent,
-          answer,
-          sources: [],
-          confidence,
+          history,
           sessionId,
-          createdAt: new Date(),
-        };
-
-        if (sessionId) {
-          await this.sessionCache.updateSession(sessionId, result);
-        }
-        return result;
+        );
+        return strategy.execute(context);
       }
 
-      const reformulatedQuery = await this.queryReformulation.reformulateQuery(
-        query,
-        history,
-      );
+      // 4. Build full context for other strategies
+      const context = await this.buildQueryContext(query, history, sessionId);
 
-      // 2. Safe Guard: If reformulation translated the query, fallback to original
-      const safeReformulatedQuery =
-        this.synthesisPort.detectLanguage(reformulatedQuery) !==
-        originalLanguage
-          ? query
-          : reformulatedQuery;
-
-      if (safeReformulatedQuery !== reformulatedQuery) {
-        this.logger.warn(
-          `Reformulation translation detected! Falling back to original query to maintain language sovereignty.`,
-        );
-      }
-
-      const isStandalone = this.isStandaloneQuery(query, safeReformulatedQuery);
-      if (isStandalone) {
-        this.logger.log(
-          `Detected standalone query: "${query}" (History bypassed)`,
-        );
-      } else {
-        this.logger.log(
-          `Detected context-dependent query: "${query}" -> "${safeReformulatedQuery}"`,
-        );
-      }
-
-      // Construct compressedHistory ONLY for the RAG flow to save tokens and focus context
-      const compressedHistory =
-        history.length > 10
-          ? await this.contextCompression.compressHistory(history)
-          : history;
-
-      const metadata = await this.synthesisPort.extractMetadata(
-        safeReformulatedQuery,
-      );
-
-      this.logger.log(
-        `Extracted metadata from reformulated query: ${JSON.stringify(metadata)}`,
-      );
-
-      if (intent === AnalysisIntent.STATISTICAL) {
-        return await this.handleStatisticalQuery(
-          safeReformulatedQuery,
-          metadata,
-          compressedHistory,
-          sessionId,
-          query,
-          isStandalone,
-          originalLanguage,
-        );
-      }
-
-      return await this.handleSemanticQuery(
-        safeReformulatedQuery,
-        metadata,
-        compressedHistory,
-        sessionId,
-        query,
-        isStandalone,
-        originalLanguage,
-      );
+      // 5. Execute selected strategy
+      return strategy.execute(context);
     } catch (error) {
-      this.logger.error(`RAG process failed: ${error.message}`, error.stack);
+      const err = error as Error;
+      this.logger.error(`RAG process failed: ${err.message}`, err.stack);
       throw error;
     }
   }
 
   /**
-   * Handles semantic queries using vector search + rerank + synthesis.
+   * Retrieves chat history for a given session.
    */
-  private async handleSemanticQuery(
-    reformulatedQuery: string,
-    metadata: QueryMetadata,
+  async getChatHistory(sessionId: string): Promise<AnalysisResult[]> {
+    return this.sessionCache.getHistory(sessionId);
+  }
+
+  /**
+   * Select the appropriate strategy for the query.
+   * Strategies are checked in priority order.
+   */
+  private selectStrategy(
+    query: string,
+    history: AnalysisResult[],
+  ): QueryStrategy {
+    for (const strategy of this.sortedStrategies) {
+      if (strategy.canHandle(query, history)) {
+        return strategy;
+      }
+    }
+    return this.defaultStrategy;
+  }
+
+  /**
+   * Load conversation history for a session.
+   */
+  private async loadHistory(sessionId?: string): Promise<AnalysisResult[]> {
+    if (!sessionId) {
+      return [];
+    }
+
+    const history = await this.sessionCache.getHistory(sessionId);
+    this.logger.debug(
+      `Retrieved ${history.length} history turns for session ${sessionId}`,
+    );
+    return history;
+  }
+
+  /**
+   * Build context for conversational queries.
+   * Simpler context - no reformulation or metadata extraction needed.
+   */
+  private buildConversationalContext(
+    query: string,
     history: AnalysisResult[],
     sessionId?: string,
-    originalQuery?: string,
-    isStandalone: boolean = false,
-    targetLanguage?: "Korean" | "English",
-  ): Promise<AnalysisResult> {
-    const intent = AnalysisIntent.SEMANTIC;
-    const query = originalQuery || reformulatedQuery;
+  ): QueryContext {
+    const targetLanguage = this.synthesisPort.detectLanguage(query);
 
-    // Transform query to log-style narrative for better semantic matching
-    const logStyleQuery =
-      await this.synthesisPort.transformQueryToLogStyle(reformulatedQuery);
+    return {
+      originalQuery: query,
+      reformulatedQuery: query,
+      isStandalone: true,
+      metadata: {
+        startTime: null,
+        endTime: null,
+        service: null,
+        route: null,
+        errorCode: null,
+        hasError: false,
+      },
+      history,
+      sessionId,
+      targetLanguage,
+    };
+  }
 
-    const structuredQuery = this.queryPreprocessor.preprocessQuery(
-      logStyleQuery,
-      metadata,
+  /**
+   * Build full query context for semantic/statistical queries.
+   * Includes reformulation, metadata extraction, and history compression.
+   */
+  private async buildQueryContext(
+    query: string,
+    history: AnalysisResult[],
+    sessionId?: string,
+  ): Promise<QueryContext> {
+    // 1. Detect original language
+    const originalLanguage = this.synthesisPort.detectLanguage(query);
+
+    // 2. Reformulate query with history context
+    const reformulatedQuery = await this.queryReformulation.reformulateQuery(
+      query,
+      history,
     );
 
-    this.logger.log(
-      `\n\n 
-        Original query: "${query}" \n
-        -> Transformed query (log-style): "${logStyleQuery}" \n
-        -> Structured query: "${structuredQuery}" \n`,
-    );
+    // 3. Safe Guard: If reformulation translated the query, fallback to original
+    const safeReformulatedQuery =
+      this.synthesisPort.detectLanguage(reformulatedQuery) !== originalLanguage
+        ? query
+        : reformulatedQuery;
 
-    const { embedding } =
-      await this.embeddingPort.createEmbedding(structuredQuery);
+    if (safeReformulatedQuery !== reformulatedQuery) {
+      this.logger.warn(
+        `Reformulation translation detected! Falling back to original query to maintain language sovereignty.`,
+      );
+    }
 
-    this.logger.log(
-      `Performing vector search with embedding (dimension: ${embedding.length}), metadata: ${JSON.stringify(metadata)}`,
-    );
-
-    let vectorResults = this.semanticCache.getCachedResults(
-      embedding,
-      metadata,
-    );
-
-    if (vectorResults && vectorResults.length > 0) {
+    // 4. Detect if query is standalone
+    const isStandalone = this.isStandaloneQuery(query, safeReformulatedQuery);
+    if (isStandalone) {
       this.logger.log(
-        `Semantic cache hit! Using cached vector results (${vectorResults.length} results)`,
+        `Detected standalone query: "${query}" (History bypassed)`,
       );
     } else {
       this.logger.log(
-        vectorResults
-          ? `Semantic cache hit but empty results, performing vector search`
-          : `Semantic cache miss, performing vector search`,
-      );
-      vectorResults = await this.logStoragePort.vectorSearch(
-        embedding,
-        10,
-        metadata,
-      );
-
-      if (vectorResults && vectorResults.length > 0) {
-        this.semanticCache.setCachedResults(embedding, metadata, vectorResults);
-      }
-    }
-
-    this.logger.log(
-      `Vector search returned ${vectorResults?.length || 0} results`,
-    );
-
-    if (!vectorResults || vectorResults.length === 0) {
-      this.logger.warn(
-        `No vector search results found. This could mean:
-          1. No embeddings exist in wide_events_embedded collection
-          2. Service filter is too strict (filtering by: ${metadata.service || "none"})
-          3. Vector search index may not be properly configured
-          Consider running: POST /embeddings/batch?limit=100 to create embeddings`,
-      );
-      return this.createEmptyResult(query, intent, sessionId);
-    }
-
-    if (vectorResults.length > 0) {
-      this.logger.log(
-        `Top 3 vector search results:\n${vectorResults
-          .slice(0, 3)
-          .map(
-            (r, i) =>
-              `  ${i + 1}. Score: ${r.score?.toFixed(4) || "N/A"}, Summary: ${r.summary?.substring(0, 100) || "N/A"}`,
-          )
-          .join("\n")}`,
+        `Detected context-dependent query: "${query}" -> "${safeReformulatedQuery}"`,
       );
     }
 
-    const documentsForRerank = vectorResults.map((res) => res.summary);
-    const rerankedIndices = await this.rerankPort.rerank(
-      query,
-      documentsForRerank,
-      5,
-    );
-    this.logger.log(
-      `Reranked indices: ${JSON.stringify(rerankedIndices, null, 2)}`,
-    );
-    const topResults = rerankedIndices.map((item) => vectorResults[item.index]);
+    // 5. Compress history if too long
+    const compressedHistory =
+      history.length > 10
+        ? await this.contextCompression.compressHistory(history)
+        : history;
 
-    this.logger.log(`Top results: ${JSON.stringify(topResults, null, 2)}`);
-
-    const eventIds = topResults.map((res) => res.eventId);
-
-    let fullLogs = await this.logStoragePort.getLogsByEventIds(eventIds);
-    this.logger.log(`Full logs: ${JSON.stringify(fullLogs, null, 2)}`);
-    if (metadata.hasError || metadata.errorCode) {
-      fullLogs = fullLogs.filter((log) => {
-        if (metadata.hasError && !log.error) {
-          return false;
-        }
-        if (metadata.errorCode && log.error?.code !== metadata.errorCode) {
-          return false;
-        }
-        return true;
-      });
-      this.logger.log(`Filtered logs: ${JSON.stringify(fullLogs, null, 2)}`);
-      if (fullLogs.length === 0) {
-        this.logger.warn(
-          `Post-filtering removed all results. Original count: ${eventIds.length}, Filtered: 0`,
-        );
-      }
-    }
-
-    const requestIds = fullLogs.map((log) => log.requestId).filter(Boolean);
-
-    const synthesisHistory = isStandalone ? [] : history;
-
-    const { answer, confidence } = await this.synthesisPort.synthesize(
-      reformulatedQuery,
-      fullLogs,
-      synthesisHistory,
-      targetLanguage,
+    // 6. Extract metadata from reformulated query
+    const metadata = await this.synthesisPort.extractMetadata(
+      safeReformulatedQuery,
     );
 
     this.logger.log(
-      `Synthesized answer (raw): "${answer.substring(0, 100)}${answer.length > 100 ? "..." : ""}" (confidence: ${confidence})`,
+      `Extracted metadata from reformulated query: ${JSON.stringify(metadata)}`,
     );
 
-    let finalAnswer = answer;
-    let finalConfidence = confidence;
-    try {
-      const verification = await this.synthesisPort.verifyGrounding(
-        reformulatedQuery,
-        answer,
-        fullLogs,
-      );
-
-      this.logger.log(
-        `Grounding verification: ${verification.status}, action: ${verification.action}`,
-      );
-
-      if (verification.action === "REJECT_ANSWER") {
-        finalAnswer = "Not enough evidence to provide a reliable answer.";
-        finalConfidence = 0;
-        this.logger.warn(
-          `Answer rejected due to insufficient grounding. Unverified claims: ${verification.unverifiedClaims.join(", ")}`,
-        );
-      } else if (verification.action === "ADJUST_CONFIDENCE") {
-        finalConfidence = Math.min(
-          confidence,
-          confidence * verification.confidenceAdjustment,
-        );
-        if (verification.unverifiedClaims.length > 0) {
-          finalAnswer = `${answer}\n\n[Note: Some claims could not be fully verified: ${verification.unverifiedClaims.join(", ")}]`;
-        }
-        this.logger.log(
-          `Confidence adjusted from ${confidence} to ${finalConfidence} based on verification`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `Grounding verification failed, using original answer: ${error.message}`,
-      );
-    }
-
-    const result: AnalysisResult = {
-      question: query,
-      intent,
-      answer: finalAnswer,
-      sources: requestIds,
-      confidence: finalConfidence,
+    return {
+      originalQuery: query,
+      reformulatedQuery: safeReformulatedQuery,
+      isStandalone,
+      metadata,
+      history: compressedHistory,
       sessionId,
-      createdAt: new Date(),
+      targetLanguage: originalLanguage,
     };
-
-    if (sessionId) {
-      // For standalone queries, we update the session cache with the new result
-      // but we don't necessarily need the history for the NEXT standalone query.
-      await this.sessionCache.updateSession(sessionId, result);
-    }
-
-    return result;
   }
 
   /**
@@ -393,11 +238,11 @@ export class SearchService extends SearchUseCase {
    * If reformulated query is essentially the same as original, it's likely standalone.
    */
   private isStandaloneQuery(original: string, reformulated: string): boolean {
-    const normOriginal = original.toLowerCase().trim().replace(/[?.!]/g, "");
+    const normOriginal = original.toLowerCase().trim().replace(/[?.!]/g, '');
     const normReformulated = reformulated
       .toLowerCase()
       .trim()
-      .replace(/[?.!]/g, "");
+      .replace(/[?.!]/g, '');
 
     // If they are very similar, consider it standalone
     return (
@@ -405,227 +250,5 @@ export class SearchService extends SearchUseCase {
       normReformulated.includes(normOriginal) ||
       normOriginal.length / normReformulated.length > 0.8
     );
-  }
-
-  /**
-   * Handles statistical/aggregation queries using MongoDB aggregation pipelines.
-   */
-  private async handleStatisticalQuery(
-    reformulatedQuery: string,
-    metadata: QueryMetadata,
-    history: AnalysisResult[],
-    sessionId?: string,
-    originalQuery?: string,
-    isStandalone: boolean = false,
-    targetLanguage?: "Korean" | "English",
-  ): Promise<AnalysisResult> {
-    const intent = AnalysisIntent.STATISTICAL;
-    const query = originalQuery || reformulatedQuery;
-    this.logger.log(`Handling statistical query: "${reformulatedQuery}"`);
-
-    try {
-      const { templateId, params } =
-        await this.synthesisPort.analyzeStatisticalQuery(
-          reformulatedQuery,
-          metadata,
-        );
-      this.logger.log(
-        `LLM detected template: ${templateId}, params: ${JSON.stringify(params)}`,
-      );
-
-      const aggregationResults = await this.aggregation.executeTemplate(
-        templateId,
-        params,
-      );
-
-      let contextLogs: any[] = [];
-      if (aggregationResults && aggregationResults.length > 0) {
-        // Use log-style transformation for better context log retrieval
-        const logStyleQuery =
-          await this.synthesisPort.transformQueryToLogStyle(reformulatedQuery);
-        const searchMetadata = params.metadata || metadata;
-        const structuredQuery = this.queryPreprocessor.preprocessQuery(
-          logStyleQuery,
-          searchMetadata,
-        );
-
-        const { embedding } =
-          await this.embeddingPort.createEmbedding(structuredQuery);
-
-        contextLogs = this.semanticCache.getCachedResults(
-          embedding,
-          searchMetadata,
-        );
-
-        if (contextLogs && contextLogs.length > 0) {
-          this.logger.log(
-            `Semantic cache hit for statistical query context logs (${contextLogs.length} results)`,
-          );
-          contextLogs = contextLogs.slice(0, 5);
-        } else {
-          this.logger.log(
-            contextLogs
-              ? `Semantic cache hit but empty results for statistical query, performing vector search`
-              : `Semantic cache miss for statistical query, performing vector search`,
-          );
-          contextLogs = await this.logStoragePort.vectorSearch(
-            embedding,
-            5,
-            searchMetadata,
-          );
-
-          if (contextLogs && contextLogs.length > 0) {
-            this.semanticCache.setCachedResults(
-              embedding,
-              searchMetadata,
-              contextLogs,
-            );
-          }
-        }
-      }
-
-      const synthesisContext = {
-        aggregationResults,
-        contextLogs: contextLogs.slice(0, 5),
-      };
-
-      const synthesisHistory = isStandalone ? [] : history;
-
-      const { answer, confidence } = await this.synthesisPort.synthesize(
-        reformulatedQuery,
-        [synthesisContext],
-        synthesisHistory,
-        targetLanguage,
-      );
-
-      this.logger.log(
-        `Synthesized statistical answer (raw): "${answer.substring(0, 100)}${answer.length > 100 ? "..." : ""}" (confidence: ${confidence})`,
-      );
-
-      let finalAnswer = answer;
-      let finalConfidence = confidence;
-      try {
-        const verificationContext = [
-          ...(aggregationResults || []),
-          ...(contextLogs.slice(0, 5) || []),
-        ];
-
-        const verification = await this.synthesisPort.verifyGrounding(
-          reformulatedQuery,
-          answer,
-          verificationContext,
-        );
-
-        this.logger.log(
-          `Grounding verification: ${verification.status}, action: ${verification.action}`,
-        );
-
-        if (verification.action === "REJECT_ANSWER") {
-          finalAnswer = "Not enough evidence to provide a reliable answer.";
-          finalConfidence = 0;
-          this.logger.warn(
-            `Answer rejected due to insufficient grounding. Unverified claims: ${verification.unverifiedClaims.join(", ")}`,
-          );
-        } else if (verification.action === "ADJUST_CONFIDENCE") {
-          finalConfidence = Math.min(
-            confidence,
-            confidence * verification.confidenceAdjustment,
-          );
-          if (verification.unverifiedClaims.length > 0) {
-            finalAnswer = `${answer}\n\n[Note: Some claims could not be fully verified: ${verification.unverifiedClaims.join(", ")}]`;
-          }
-          this.logger.log(
-            `Confidence adjusted from ${confidence} to ${finalConfidence} based on verification`,
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          `Grounding verification failed, using original answer: ${error.message}`,
-        );
-      }
-
-      const requestIds = aggregationResults
-        ? aggregationResults
-            .flatMap((result: any) =>
-              result.examples
-                ? result.examples.map((ex: any) => ex.requestId)
-                : [],
-            )
-            .filter(Boolean)
-        : [];
-
-      const result: AnalysisResult = {
-        question: query,
-        intent,
-        answer: finalAnswer,
-        sources: requestIds,
-        confidence: finalConfidence,
-        sessionId,
-      };
-
-      if (sessionId) {
-        await this.sessionCache.updateSession(sessionId, result);
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(
-        `Statistical query handling failed: ${error.message}`,
-        error.stack,
-      );
-      throw error;
-    }
-  }
-
-  async getChatHistory(sessionId: string): Promise<AnalysisResult[]> {
-    return this.sessionCache.getHistory(sessionId);
-  }
-
-  private classifyIntent(query: string): AnalysisIntent {
-    const lowerQuery = query.toLowerCase();
-
-    const conversationalKeywords = [...CONVERSATIONAL_KEYWORDS];
-
-    if (conversationalKeywords.some((k) => lowerQuery.includes(k))) {
-      return AnalysisIntent.CONVERSATIONAL;
-    }
-
-    const statisticalKeywords = STATISTIC_KEYWORDS;
-    const semanticKeywords = SEMANTIC_KEYWORDS;
-
-    const aggregationKeywords = AGGREGATION_KEYWORDS;
-
-    if (
-      aggregationKeywords.some((k) => lowerQuery.includes(k)) ||
-      statisticalKeywords.some((k) => lowerQuery.includes(k))
-    ) {
-      return AnalysisIntent.STATISTICAL;
-    } else if (semanticKeywords.some((k) => lowerQuery.includes(k))) {
-      return AnalysisIntent.SEMANTIC;
-    }
-
-    return AnalysisIntent.UNKNOWN;
-  }
-
-  /**
-   * Creates an empty result for a query.
-   * @param question The query.
-   * @param intent The intent.
-   * @param sessionId The session ID.
-   * @returns The empty result.
-   */
-  private createEmptyResult(
-    question: string,
-    intent: AnalysisIntent,
-    sessionId?: string,
-  ): AnalysisResult {
-    return {
-      question,
-      intent,
-      answer: "Not enough evidence.",
-      sources: [],
-      sessionId,
-      confidence: 0,
-    };
   }
 }

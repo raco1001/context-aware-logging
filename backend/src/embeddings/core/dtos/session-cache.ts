@@ -1,4 +1,4 @@
-import { AnalysisResult } from "./analysis-result";
+import { AnalysisResult } from './analysis-result';
 
 export interface SessionCacheDto {
   history: AnalysisResult[];

@@ -1,4 +1,4 @@
-import { LoggingContext } from "@logging/domain";
+import { LoggingContext } from '@logging/domain';
 
 /**
  * LoggingUseCase - Inbound port (use case) for logging operations.

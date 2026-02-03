@@ -1,6 +1,6 @@
-import { Module } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { EmbeddingUseCase, SearchUseCase } from "@embeddings/in-ports";
+import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EmbeddingUseCase, SearchUseCase } from '@embeddings/in-ports';
 import {
   EmbeddingPort,
   RerankPort,
@@ -8,8 +8,15 @@ import {
   ChatHistoryPort,
   LogStoragePort,
   SessionCachePort,
-} from "@embeddings/out-ports";
-import { EmbeddingService, SearchService } from "@embeddings/service";
+} from '@embeddings/out-ports';
+import {
+  EmbeddingService,
+  SearchService,
+  QUERY_STRATEGIES,
+  SemanticQueryStrategy,
+  StatisticalQueryStrategy,
+  ConversationalQueryStrategy,
+} from '@embeddings/service';
 import {
   QueryPreprocessorService,
   SummaryEnrichmentService,
@@ -18,7 +25,7 @@ import {
   QueryReformulationService,
   ContextCompressionService,
   SemanticCacheService,
-} from "@embeddings/service/sub-services";
+} from '@embeddings/service/sub-services';
 import {
   VoyageAdapter,
   VoyageClient,
@@ -30,11 +37,11 @@ import {
   SessionInMemoryAdapter,
   RedisClient,
   SessionRedisAdapter,
-} from "@embeddings/infrastructure";
+} from '@embeddings/infrastructure';
 import {
   EmbeddingController,
   SearchController,
-} from "@embeddings/presentation";
+} from '@embeddings/presentation';
 import {
   PromptTemplateRegistry,
   QueryMetadataSynthesisPrompt,
@@ -44,7 +51,7 @@ import {
   StatisticalAnalysisPrompt,
   GroundingVerificationPrompt,
   LogStyleTransformationPrompt,
-} from "@embeddings/domain/prompts";
+} from '@embeddings/domain/prompts';
 
 @Module({
   controllers: [EmbeddingController, SearchController],
@@ -118,6 +125,23 @@ import {
     ContextCompressionService,
     // Step 5: Semantic Caching Service
     SemanticCacheService,
+    // Query Strategies (Strategy Pattern)
+    SemanticQueryStrategy,
+    StatisticalQueryStrategy,
+    ConversationalQueryStrategy,
+    {
+      provide: QUERY_STRATEGIES,
+      useFactory: (
+        semantic: SemanticQueryStrategy,
+        statistical: StatisticalQueryStrategy,
+        conversational: ConversationalQueryStrategy,
+      ) => [semantic, statistical, conversational],
+      inject: [
+        SemanticQueryStrategy,
+        StatisticalQueryStrategy,
+        ConversationalQueryStrategy,
+      ],
+    },
     // Services (Inbound Ports, Use Cases)
     {
       provide: EmbeddingUseCase,
@@ -154,8 +178,8 @@ import {
       provide: SessionCachePort,
       useFactory: (configService: ConfigService, redisClient: RedisClient) => {
         const cacheType =
-          configService.get<string>("SESSION_CACHE_TYPE") || "memory";
-        if (cacheType === "redis") {
+          configService.get<string>('SESSION_CACHE_TYPE') || 'memory';
+        if (cacheType === 'redis') {
           return new SessionRedisAdapter(redisClient);
         }
         return new SessionInMemoryAdapter();
