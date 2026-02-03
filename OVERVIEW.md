@@ -92,7 +92,7 @@ We verified the system through **Operational Scenarios** rather than just unit t
 
 - **Stress Testing**: Proved ~75% cost reduction through sampling 2,000 requests without losing critical error signals.
 - **Fault Tolerance**: Verified zero data loss during simulated Kafka failures via the Direct-to-DB fallback logic.
-- **Persistence**: Confirmed session data and MQ-buffered logs were preserved across infrastructure restarts.
+- **Persistence**: Confirmed session data and Kafka-buffered logs were preserved across infrastructure restarts.
 
 ---
 
