@@ -100,6 +100,7 @@ docker-compose up -d
   ```
 
 - **테스트**: `POST /payments` 엔드포인트로 요청을 보냅니다.
+
   - 테스트 방법:
 
     ```bash
@@ -209,6 +210,7 @@ docker-compose up -d
   - Gemini flash 2.0의 API키를 환경변수에 등록해야 합니다.
   - 외부 MongoDB를 사용중이라면 <프로젝트 Root>/docker/mongo/mongodb-init.js 에 Phase 4 단계 까지의 MongoDB 오브젝트가 생성되어 있어야 합니다.
 - **테스트 방법(예시)**:
+
   - 의미 검색:
 
     ```bash
@@ -265,7 +267,7 @@ Kafka를 통한 로그 수집 디커플링, Redis 캐싱, 샘플링 전략을 �
     # 저장소 설정
     STORAGE_TYPE=kafka ## file, mongodb, kafka
 
-    # Docker Compose
+    # Docker Compose: 13
     # MQ 설정
     ## MQ Connection Configurations
     MQ_ENABLED=true
@@ -293,6 +295,7 @@ Kafka를 통한 로그 수집 디커플링, Redis 캐싱, 샘플링 전략을 �
   ```
 
 - **테스트 방법**: 대량의 요청을 보내거나 Kafka 인프라를 일시 정지시켜 폴백(Fallback) 로직이 작동하는지 확인합니다.
+
   - ex. Kafka 컨테이너 중지
 
   ```bash
@@ -302,7 +305,9 @@ Kafka를 통한 로그 수집 디커플링, Redis 캐싱, 샘플링 전략을 �
   ```
 
 - **결과 확인**: 시스템 부하가 조절되고, 장애 상황에서도 로그 유실 없이 안전하게 처리됩니다.
+
   - 기타 결과 확인:
+
     - Kafka Topic 확인
 
       ```bash

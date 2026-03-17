@@ -208,6 +208,7 @@ export class SemanticQueryStrategy implements QueryStrategy {
       sources: requestIds,
       confidence: finalConfidence,
       sessionId,
+      viewType: 'chat',
       createdAt: new Date(),
     };
 
@@ -277,6 +278,7 @@ export class SemanticQueryStrategy implements QueryStrategy {
       sources: [],
       sessionId,
       confidence: 0,
+      viewType: 'chat',
     };
   }
 }

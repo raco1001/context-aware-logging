@@ -58,6 +58,7 @@ export class ConversationalQueryStrategy implements QueryStrategy {
         sources: [],
         confidence: 1,
         sessionId,
+        viewType: 'chat',
         createdAt: new Date(),
       };
     }
@@ -80,6 +81,7 @@ export class ConversationalQueryStrategy implements QueryStrategy {
       sources: [],
       confidence,
       sessionId,
+      viewType: 'chat',
       createdAt: new Date(),
     };
 

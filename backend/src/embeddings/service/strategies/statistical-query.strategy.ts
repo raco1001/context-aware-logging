@@ -4,7 +4,7 @@ import {
   SynthesisPort,
   LogStoragePort,
 } from '@embeddings/out-ports';
-import { AnalysisResult } from '@embeddings/dtos';
+import { AnalysisResult, StatsPayload } from '@embeddings/dtos';
 import {
   AnalysisIntent,
   STATISTIC_KEYWORDS,
@@ -133,6 +133,12 @@ export class StatisticalQueryStrategy implements QueryStrategy {
             .filter(Boolean)
         : [];
 
+      const statsPayload: StatsPayload = {
+        // For now we expose raw aggregation results and leave
+        // overview/timeseries/routes flexible for the frontend to interpret.
+        raw: aggregationResults,
+      };
+
       const result: AnalysisResult = {
         question: originalQuery,
         intent: this.intent,
@@ -140,6 +146,8 @@ export class StatisticalQueryStrategy implements QueryStrategy {
         sources: requestIds,
         confidence: finalConfidence,
         sessionId,
+        viewType: 'chat+analytics',
+        statsPayload,
       };
 
       if (sessionId) {
