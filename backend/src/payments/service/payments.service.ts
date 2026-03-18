@@ -49,6 +49,7 @@ export class PaymentsService extends PaymentsServicePort {
       );
       return {
         success: false,
+        stepsReached: 1,
         errorCode: status.code,
         errorMessage: status.message,
         errorService: "payments",
@@ -71,6 +72,7 @@ export class PaymentsService extends PaymentsServicePort {
       const error = this.parseAdapterError(e as Error);
       return {
         success: false,
+        stepsReached: 2,
         errorCode: error.code,
         errorMessage: error.message,
         errorService: error.service || "paymentGateway",
@@ -87,6 +89,7 @@ export class PaymentsService extends PaymentsServicePort {
 
       return {
         success: true,
+        stepsReached: 3,
         transactionId,
         orderId: orderRes.orderId,
         gatewayProcessingTimeMs,
@@ -96,6 +99,7 @@ export class PaymentsService extends PaymentsServicePort {
       const error = this.parseAdapterError(e as Error);
       return {
         success: false,
+        stepsReached: 3,
         errorCode: error.code,
         errorMessage: error.message,
         errorService: error.service || "orders",

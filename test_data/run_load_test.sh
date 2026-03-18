@@ -13,7 +13,8 @@ fi
 echo "===================================================="
 echo "  Wide Event Logging Load Test"
 echo "  Target: $URL"
-echo "  Data:   $DATA_FILE (2000 entries)"
+ENTRY_COUNT=$(node -e "const fs=require('fs'); const d=JSON.parse(fs.readFileSync('$DATA_FILE','utf8')); process.stdout.write(String(d.length));")
+echo "  Data:   $DATA_FILE ($ENTRY_COUNT entries)"
 echo "===================================================="
 
 # Check if backend is reachable
@@ -28,6 +29,7 @@ node -e "
 const http = require('http');
 const fs = require('fs');
 const data = JSON.parse(fs.readFileSync('$DATA_FILE', 'utf8'));
+const total = data.length;
 
 async function sendRequest(item, index) {
   return new Promise((resolve) => {
@@ -65,7 +67,7 @@ async function run() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     
     if ((i + batchSize) % 100 === 0 || i + batchSize >= data.length) {
-      process.stdout.write('\rProgress: ' + Math.min(i + batchSize, data.length) + '/2000');
+      process.stdout.write('\rProgress: ' + Math.min(i + batchSize, data.length) + '/' + total);
     }
   }
   console.log('\n\nLoad test complete.');

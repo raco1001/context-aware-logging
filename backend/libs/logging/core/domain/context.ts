@@ -7,12 +7,19 @@
  */
 export class LoggingContext {
   public readonly requestId: string;
-  public readonly timestamp: string;
+  public readonly timestamp: Date;
   public service: string;
   public route: string;
   public user?: { id: string; role: string };
   public error?: { code: string; message: string };
-  public performance?: { durationMs: number };
+  public failedAt?: string;
+  public stepsReached?: number;
+  public performance?: {
+    durationMs: number;
+    balanceCheckMs?: number;
+    gatewayMs?: number;
+    orderConfirmationMs?: number;
+  };
   /** Domain-specific metadata storage */
   public _metadata: Record<string, unknown>;
 
@@ -24,7 +31,7 @@ export class LoggingContext {
 
   constructor(requestId: string, service: string, route: string) {
     this.requestId = requestId;
-    this.timestamp = new Date().toISOString();
+    this.timestamp = new Date();
     this.service = service;
     this.route = route;
     this._metadata = {};

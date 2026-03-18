@@ -1,10 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LogStoragePort, Watermark } from '@embeddings/out-ports';
-import { LogEmbeddingEntity } from '@embeddings/domain';
+import {
+  LogEmbeddingEntity,
+  RawLogDocument,
+  VectorSearchResult,
+} from '@embeddings/domain';
 import { MongoEmbeddingClient } from './mongo.client';
 import { EmbeddingStatus } from '@logging/value-objects';
 import { QueryMetadata } from '@embeddings/dtos';
 import { WideEvent } from '@logging/domain';
+import { ObjectId } from 'mongodb';
 
 /**
  * MongoLogStorageAdapter - Infrastructure layer implementation of LogStoragePort.
@@ -82,6 +87,8 @@ export class MongoLogStorageAdapter extends LogStoragePort {
           route: doc.route,
           user: doc.user,
           error: doc.error,
+          failedAt: doc.failedAt,
+          stepsReached: doc.stepsReached,
           performance: doc.performance,
         });
 
@@ -94,6 +101,11 @@ export class MongoLogStorageAdapter extends LogStoragePort {
           doc._summary,
           EmbeddingStatus.PENDING,
           doc.service,
+          wideEvent.route,
+          wideEvent.getOutcome(),
+          !!wideEvent.error,
+          wideEvent.error?.code,
+          wideEvent.failedAt,
           undefined,
           undefined,
           wideEvent,
@@ -120,6 +132,7 @@ export class MongoLogStorageAdapter extends LogStoragePort {
       model: string;
       service?: string;
       timestamp?: Date;
+      wideEvent?: WideEvent;
     }>,
     newWatermark: Watermark,
   ): Promise<void> {
@@ -136,6 +149,11 @@ export class MongoLogStorageAdapter extends LogStoragePort {
           embedding: r.embedding,
           service: r.service,
           timestamp: r.timestamp || new Date(),
+          route: r.wideEvent?.route ?? null,
+          hasError: !!r.wideEvent?.error,
+          errorCode: r.wideEvent?.error?.code ?? null,
+          failedAt: r.wideEvent?.failedAt ?? null,
+          outcome: r.wideEvent?.getOutcome?.() ?? null,
           createdAt: new Date(),
         }));
         await embeddedColl.insertMany(insertDocs);
@@ -178,7 +196,7 @@ export class MongoLogStorageAdapter extends LogStoragePort {
     embedding: number[],
     limit: number,
     metadata?: QueryMetadata,
-  ): Promise<any[]> {
+  ): Promise<VectorSearchResult[]> {
     try {
       const collection = this.client.getCollection(this.embeddedCollection);
 
@@ -204,6 +222,30 @@ export class MongoLogStorageAdapter extends LogStoragePort {
         if (metadata.service) {
           filter.service = metadata.service;
           this.logger.debug(`Applying service filter: "${metadata.service}"`);
+        }
+        if (metadata.hasError) {
+          filter.hasError = true;
+          this.logger.debug(`Applying hasError filter: true`);
+        }
+        if (metadata.errorCode) {
+          filter.errorCode = metadata.errorCode;
+          this.logger.debug(`Applying errorCode filter: "${metadata.errorCode}"`);
+        }
+        if ((metadata as any).route) {
+          filter.route = (metadata as any).route;
+          this.logger.debug(`Applying route filter: "${(metadata as any).route}"`);
+        }
+        if ((metadata as any).failedAt) {
+          filter.failedAt = (metadata as any).failedAt;
+          this.logger.debug(
+            `Applying failedAt filter: "${(metadata as any).failedAt}"`,
+          );
+        }
+        if ((metadata as any).outcome) {
+          filter.outcome = (metadata as any).outcome;
+          this.logger.debug(
+            `Applying outcome filter: "${(metadata as any).outcome}"`,
+          );
         }
       }
 
@@ -231,14 +273,23 @@ export class MongoLogStorageAdapter extends LogStoragePort {
             _id: 0,
             eventId: 1,
             summary: 1,
+            service: 1,
+            timestamp: 1,
+            route: 1,
+            hasError: 1,
+            errorCode: 1,
+            outcome: 1,
+            failedAt: 1,
             score: { $meta: 'vectorSearchScore' },
           },
         },
       ];
 
-      let results: any[];
+      let results: VectorSearchResult[];
       try {
-        results = await collection.aggregate(pipeline).toArray();
+        results = (await collection
+          .aggregate(pipeline)
+          .toArray()) as VectorSearchResult[];
       } catch (error: any) {
         if (
           error.message?.includes('index') ||
@@ -275,7 +326,9 @@ export class MongoLogStorageAdapter extends LogStoragePort {
           delete vectorSearchStage.filter;
         }
 
-        const fallbackResults = await collection.aggregate(pipeline).toArray();
+        const fallbackResults = (await collection
+          .aggregate(pipeline)
+          .toArray()) as VectorSearchResult[];
         this.logger.log(
           `Fallback search (without service filter) returned ${fallbackResults.length} results`,
         );
@@ -295,10 +348,15 @@ export class MongoLogStorageAdapter extends LogStoragePort {
   /**
    * Retrieves full log documents by their internal IDs.
    */
-  async getLogsByEventIds(eventIds: any[]): Promise<any[]> {
+  async getLogsByEventIds(eventIds: unknown[]): Promise<RawLogDocument[]> {
     try {
       const collection = this.client.getCollection(this.logsCollection);
-      return await collection.find({ _id: { $in: eventIds } }).toArray();
+      const objectIds = eventIds
+        .map((id) => this.toObjectIdOrNull(id))
+        .filter((id): id is ObjectId => id !== null);
+      return (await collection
+        .find({ _id: { $in: objectIds } })
+        .toArray()) as RawLogDocument[];
     } catch (error) {
       this.logger.error(`Failed to get logs by event IDs: ${error.message}`);
       throw error;
@@ -335,15 +393,24 @@ export class MongoLogStorageAdapter extends LogStoragePort {
   /**
    * Fetches full log documents by their request IDs.
    */
-  async findLogsByRequestIds(requestIds: string[]): Promise<any[]> {
+  async findLogsByRequestIds(requestIds: string[]): Promise<RawLogDocument[]> {
     try {
       const collection = this.client.getCollection(this.logsCollection);
-      return await collection
+      return (await collection
         .find({ requestId: { $in: requestIds } })
-        .toArray();
+        .toArray()) as RawLogDocument[];
     } catch (error) {
       this.logger.error(`Failed to find logs by requestIds: ${error.message}`);
       throw error;
     }
+  }
+
+  private toObjectIdOrNull(value: unknown): ObjectId | null {
+    if (!value) return null;
+    if (value instanceof ObjectId) return value;
+    if (typeof value === 'string' && ObjectId.isValid(value)) {
+      return new ObjectId(value);
+    }
+    return null;
   }
 }

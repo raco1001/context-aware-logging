@@ -1,14 +1,15 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
-import { SearchUseCase } from '@embeddings/in-ports';
-import { SynthesisPort } from '@embeddings/out-ports';
-import { AnalysisResult } from '@embeddings/dtos';
-import { AnalysisIntent } from '@embeddings/value-objects/filter';
+import { Injectable, Logger, Inject } from "@nestjs/common";
+import { SearchUseCase } from "@embeddings/in-ports";
+import { SynthesisPort } from "@embeddings/out-ports";
+import { AnalysisResult } from "@embeddings/dtos";
+import { AnalysisIntent } from "@embeddings/value-objects/filter";
 import {
   SessionCacheService,
   QueryReformulationService,
   ContextCompressionService,
-} from '@embeddings/service/sub-services';
-import { QueryStrategy, QueryContext, QUERY_STRATEGIES } from './strategies';
+} from "@embeddings/service/sub-services";
+import { QueryStrategy, QueryContext, QUERY_STRATEGIES } from "./strategies";
+import { normalizeMetadata } from "@embeddings/utils";
 
 /**
  * SearchService - Orchestrates query handling using Strategy Pattern.
@@ -53,7 +54,7 @@ export class SearchService extends SearchUseCase {
       strategies[0];
 
     this.logger.log(
-      `Initialized with ${strategies.length} strategies: ${strategies.map((s) => s.intent).join(', ')}`,
+      `Initialized with ${strategies.length} strategies: ${strategies.map((s) => s.intent).join(", ")}`,
     );
   }
 
@@ -65,7 +66,7 @@ export class SearchService extends SearchUseCase {
    */
   async ask(query: string, sessionId?: string): Promise<AnalysisResult> {
     this.logger.log(
-      `Processing RAG query: "${query}" (Session: ${sessionId || 'none'})`,
+      `Processing RAG query: "${query}" (Session: ${sessionId || "none"})`,
     );
 
     try {
@@ -218,15 +219,20 @@ export class SearchService extends SearchUseCase {
       safeReformulatedQuery,
     );
 
+    const normalizedMetadata = normalizeMetadata(metadata);
+
     this.logger.log(
       `Extracted metadata from reformulated query: ${JSON.stringify(metadata)}`,
+    );
+    this.logger.log(
+      `Normalized metadata: ${JSON.stringify(normalizedMetadata)}`,
     );
 
     return {
       originalQuery: query,
       reformulatedQuery: safeReformulatedQuery,
       isStandalone,
-      metadata,
+      metadata: normalizedMetadata,
       history: compressedHistory,
       sessionId,
       targetLanguage: originalLanguage,
@@ -238,11 +244,11 @@ export class SearchService extends SearchUseCase {
    * If reformulated query is essentially the same as original, it's likely standalone.
    */
   private isStandaloneQuery(original: string, reformulated: string): boolean {
-    const normOriginal = original.toLowerCase().trim().replace(/[?.!]/g, '');
+    const normOriginal = original.toLowerCase().trim().replace(/[?.!]/g, "");
     const normReformulated = reformulated
       .toLowerCase()
       .trim()
-      .replace(/[?.!]/g, '');
+      .replace(/[?.!]/g, "");
 
     // If they are very similar, consider it standalone
     return (

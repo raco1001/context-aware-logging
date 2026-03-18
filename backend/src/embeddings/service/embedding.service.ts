@@ -99,6 +99,7 @@ export class EmbeddingService extends EmbeddingUseCase {
           model: results[index].model,
           service: item.log.service,
           timestamp: item.log.timestamp,
+          wideEvent: item.log.wideEvent,
         }));
 
         const lastLog = chunk[chunk.length - 1];
