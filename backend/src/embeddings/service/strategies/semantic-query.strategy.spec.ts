@@ -87,6 +87,7 @@ describe('SemanticQueryStrategy (fallback & filter relaxation)', () => {
         timestamp: new Date(),
         service: 'payments',
         route: 'POST /payments',
+        _summary: 'payment failed summary',
         error: { code: 'SOME_OTHER_CODE', message: 'boom' },
       },
     ];
@@ -116,7 +117,16 @@ describe('SemanticQueryStrategy (fallback & filter relaxation)', () => {
     const synthesizeArgs = (synthesisPort.synthesize as jest.Mock).mock.calls[0];
     const contexts = synthesizeArgs[1] as RawLogDocument[];
     expect(contexts.length).toBe(1);
-    expect(result.sources).toEqual(['req-1']);
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0]).toMatchObject({
+      id: 'req-1',
+      summary: 'payment failed summary',
+      status: 'FAILED',
+      route: 'POST /payments',
+      duration: 0,
+      errorCode: 'SOME_OTHER_CODE',
+    });
+    expect(typeof result.sources[0].timestamp).toBe('string');
     expect(result.confidence).toBeGreaterThan(0);
   });
 

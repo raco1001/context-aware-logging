@@ -5,7 +5,7 @@ import {
   SynthesisPort,
   LogStoragePort,
 } from '@embeddings/out-ports';
-import { AnalysisResult } from '@embeddings/dtos';
+import { AnalysisResult, LogSource } from '@embeddings/dtos';
 import { RawLogDocument, VectorSearchResult } from '@embeddings/domain';
 import {
   AnalysisIntent,
@@ -233,7 +233,7 @@ export class SemanticQueryStrategy implements QueryStrategy {
             confidence: 0,
             sessionId,
             viewType: 'chat',
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
           };
 
           if (sessionId) {
@@ -244,8 +244,6 @@ export class SemanticQueryStrategy implements QueryStrategy {
         }
       }
     }
-
-    const requestIds = fullLogs.map((log) => log.requestId).filter(Boolean);
 
     const synthesisHistory = isStandalone ? [] : history;
 
@@ -271,11 +269,11 @@ export class SemanticQueryStrategy implements QueryStrategy {
       question: originalQuery,
       intent: this.intent,
       answer: finalAnswer,
-      sources: requestIds,
+      sources: this.toLogSources(fullLogs),
       confidence: finalConfidence,
       sessionId,
       viewType: 'chat',
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
     };
 
     if (sessionId) {
@@ -346,5 +344,27 @@ export class SemanticQueryStrategy implements QueryStrategy {
       confidence: 0,
       viewType: 'chat',
     };
+  }
+
+  private toLogSources(fullLogs: RawLogDocument[]): LogSource[] {
+    return fullLogs
+      .filter((log) => Boolean(log.requestId))
+      .map((log) => ({
+        id: log.requestId,
+        summary: log._summary ?? '',
+        status: log.error ? 'FAILED' : 'SUCCESS',
+        route: log.route ?? '',
+        duration: log.performance?.durationMs ?? 0,
+        timestamp: this.toIsoString(log.timestamp),
+        errorCode: log.error?.code,
+        failedAt: log.failedAt,
+      }));
+  }
+
+  private toIsoString(value: Date): string {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString();
+    }
+    return new Date(0).toISOString();
   }
 }

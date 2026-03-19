@@ -147,7 +147,16 @@ function createTestResult(
     question,
     intent: AnalysisIntent.SEMANTIC,
     answer,
-    sources: [`request-${index}`],
+    sources: [
+      {
+        id: `request-${index}`,
+        summary: '',
+        status: 'SUCCESS',
+        route: '',
+        duration: 0,
+        timestamp: new Date().toISOString(),
+      },
+    ],
     confidence: 0.9,
   };
 }

@@ -59,7 +59,7 @@ export class ConversationalQueryStrategy implements QueryStrategy {
         confidence: 1,
         sessionId,
         viewType: 'chat',
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       };
     }
 
@@ -82,7 +82,7 @@ export class ConversationalQueryStrategy implements QueryStrategy {
       confidence,
       sessionId,
       viewType: 'chat',
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
     };
 
     if (sessionId) {

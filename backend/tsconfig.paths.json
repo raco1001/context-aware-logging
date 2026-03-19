@@ -14,6 +14,8 @@
       "@logging/infrastructure": ["libs/logging/infrastructure/index"],
       "@logging/service": ["libs/logging/service/index"],
       "@logging/presentation": ["libs/logging/presentation/index"],
+      "@contracts": ["libs/contracts/index"],
+      "@contracts/*": ["libs/contracts/*"],
 
       "@embeddings": ["src/embeddings/embeddings.module"],
       "@embeddings/domain": ["src/embeddings/core/domain/index"],

@@ -17,6 +17,7 @@ export interface RawLogDocument {
   timestamp: Date;
   service: string;
   route: string;
+  _summary?: string;
   error?: { code: string; message: string };
   failedAt?: string;
   stepsReached?: number;

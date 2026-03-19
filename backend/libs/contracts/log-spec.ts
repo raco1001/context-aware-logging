@@ -75,4 +75,3 @@ export interface WideEventEmbeddedSpec {
   failedAt?: string;
   createdAt: Date;
 }
-
