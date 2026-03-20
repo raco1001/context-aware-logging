@@ -32,42 +32,11 @@ export interface QueryContext {
  * QueryStrategy - Interface for query handling strategies.
  *
  * Each strategy handles a specific type of query intent.
- * Strategies are selected based on canHandle() and executed via execute().
- *
- * Design principles:
- * - Single Responsibility: One strategy per intent type
- * - Open/Closed: Add new strategies without modifying existing code
- * - Dependency Inversion: Depend on abstractions (ports), not implementations
+ * Strategies are selected by intent (see IntentClassifier) and executed via execute().
  */
 export interface QueryStrategy {
-  /**
-   * The intent this strategy handles.
-   */
   readonly intent: AnalysisIntent;
 
-  /**
-   * Priority for strategy selection (higher = checked first).
-   * Useful when multiple strategies could handle the same query.
-   */
-  readonly priority: number;
-
-  /**
-   * Determine if this strategy can handle the given query.
-   * Called during strategy selection phase.
-   *
-   * @param query - The user's query string
-   * @param history - Conversation history (may influence intent detection)
-   * @returns true if this strategy should handle the query
-   */
-  canHandle(query: string, history: AnalysisResult[]): boolean;
-
-  /**
-   * Execute the query handling logic.
-   * Called after strategy selection.
-   *
-   * @param context - The preprocessed query context
-   * @returns The analysis result
-   */
   execute(context: QueryContext): Promise<AnalysisResult>;
 }
 

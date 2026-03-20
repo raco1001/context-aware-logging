@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SynthesisPort } from '@embeddings/out-ports';
-import { AnalysisResult } from '@embeddings/dtos';
+import { AnalysisResult, LogSource } from '@embeddings/dtos';
 import { AnalysisIntent } from '@embeddings/value-objects/filter';
 
 /**
@@ -56,7 +56,7 @@ export class ContextCompressionService {
       sources: this.extractSourcesFromHistory(old),
       confidence: 0.8,
       sessionId: recent[0]?.sessionId || '',
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
     };
 
     // Return summary + recent turns
@@ -89,13 +89,15 @@ export class ContextCompressionService {
   /**
    * Extracts unique sources from history.
    */
-  private extractSourcesFromHistory(history: AnalysisResult[]): string[] {
-    const sourcesSet = new Set<string>();
+  private extractSourcesFromHistory(history: AnalysisResult[]): LogSource[] {
+    const sourcesSet = new Map<string, LogSource>();
     for (const h of history) {
       if (h.sources) {
-        h.sources.forEach((s) => sourcesSet.add(s));
+        h.sources.forEach((source) => {
+          sourcesSet.set(source.id, source);
+        });
       }
     }
-    return Array.from(sourcesSet);
+    return Array.from(sourcesSet.values());
   }
 }

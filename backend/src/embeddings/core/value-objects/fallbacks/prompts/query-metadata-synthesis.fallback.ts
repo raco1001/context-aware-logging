@@ -13,6 +13,13 @@ Current Time: {{currentTime}}
   - route: string (if mentioned, e.g., "/payments/checkout", "/users/profile")
   - errorCode: string (if a specific error code is mentioned, e.g., "GATEWAY_TIMEOUT")
   - hasError: boolean (true if query mentions "failed", "error", "failure", "failed cases", etc.)
+  - intent: one of SEMANTIC, STATISTICAL, CONVERSATIONAL, SEQUENTIAL, UNKNOWN — classify the user's primary goal:
+    - STATISTICAL: counts, rates, percentages, aggregates, percentiles, top-N, "에러율", "how many"
+    - SEMANTIC: specific incidents, root cause, "what happened", "why"
+    - CONVERSATIONAL: chat meta (summarize dialogue) only when clearly about the conversation
+    - SEQUENTIAL: ordered timeline / sequence of events across requests
+    - UNKNOWN: cannot determine
+  - intentConfidence: number 0.0–1.0
 - If a field is not mentioned, return null for that field (except hasError, which defaults to false).
 - For relative times, calculate based on Current Time.
 - If "yesterday" is mentioned, startTime should be the start of yesterday and endTime the end of yesterday.

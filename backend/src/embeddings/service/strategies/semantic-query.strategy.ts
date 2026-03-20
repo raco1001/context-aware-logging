@@ -5,17 +5,13 @@ import {
   SynthesisPort,
   LogStoragePort,
 } from '@embeddings/out-ports';
-import { AnalysisResult } from '@embeddings/dtos';
-import {
-  AnalysisIntent,
-  SEMANTIC_KEYWORDS,
-} from '@embeddings/value-objects/filter';
-import {
-  QueryPreprocessorService,
-  SessionCacheService,
-  SemanticCacheService,
-} from '@embeddings/service/sub-services';
-import { QueryStrategy, QueryContext } from './query-strategy.interface';
+import { AnalysisResult, LogSource } from '@embeddings/dtos';
+import { RawLogDocument, VectorSearchResult } from '@embeddings/domain';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
+import { SessionCacheService } from '../../infrastructure/cache/session-cache.service';
+import { SemanticCacheService } from '../../infrastructure/cache/semantic-cache.service';
+import { QueryPreprocessorService } from '../preprocessing';
+import { QueryStrategy, QueryContext } from '@embeddings/in-ports';
 
 /**
  * SemanticQueryStrategy - Handles semantic/vector-based queries.
@@ -32,9 +28,10 @@ import { QueryStrategy, QueryContext } from './query-strategy.interface';
 @Injectable()
 export class SemanticQueryStrategy implements QueryStrategy {
   private readonly logger = new Logger(SemanticQueryStrategy.name);
+  private static readonly NO_MATCHING_LOGS_MESSAGE =
+    '지정한 조건에 맞는 로그를 찾지 못했습니다. 조건(에러 코드/오류 여부/시간 범위/서비스 등)을 완화해서 다시 질문해 주세요.';
 
   readonly intent = AnalysisIntent.SEMANTIC;
-  readonly priority = 10; // Lower priority than statistical
 
   constructor(
     private readonly embeddingPort: EmbeddingPort,
@@ -45,12 +42,6 @@ export class SemanticQueryStrategy implements QueryStrategy {
     private readonly sessionCache: SessionCacheService,
     private readonly semanticCache: SemanticCacheService,
   ) {}
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  canHandle(query: string, _history: AnalysisResult[]): boolean {
-    const lowerQuery = query.toLowerCase();
-    return SEMANTIC_KEYWORDS.some((k) => lowerQuery.includes(k));
-  }
 
   async execute(context: QueryContext): Promise<AnalysisResult> {
     const {
@@ -90,7 +81,8 @@ export class SemanticQueryStrategy implements QueryStrategy {
       `Performing vector search with embedding (dimension: ${embedding.length}), metadata: ${JSON.stringify(metadata)}`,
     );
 
-    let vectorResults = this.semanticCache.getCachedResults(
+    let vectorResults: VectorSearchResult[] | null =
+      this.semanticCache.getCachedResults(
       embedding,
       metadata,
     );
@@ -154,32 +146,92 @@ export class SemanticQueryStrategy implements QueryStrategy {
     );
     const topResults = rerankedIndices.map((item) => vectorResults[item.index]);
 
+    this.logger.log(
+      `Rerank selected ${topResults.length} results (from ${vectorResults.length})`,
+    );
     this.logger.log(`Top results: ${JSON.stringify(topResults, null, 2)}`);
 
     const eventIds = topResults.map((res) => res.eventId);
 
-    let fullLogs = await this.logStoragePort.getLogsByEventIds(eventIds);
+    let fullLogs: RawLogDocument[] =
+      await this.logStoragePort.getLogsByEventIds(eventIds);
+    this.logger.log(
+      `Fetched full logs: requestedEventIds=${eventIds.length}, fetchedLogs=${fullLogs.length}`,
+    );
     this.logger.log(`Full logs: ${JSON.stringify(fullLogs, null, 2)}`);
 
     if (metadata.hasError || metadata.errorCode) {
-      fullLogs = fullLogs.filter((log) => {
-        if (metadata.hasError && !log.error) {
-          return false;
-        }
-        if (metadata.errorCode && log.error?.code !== metadata.errorCode) {
-          return false;
-        }
-        return true;
+      const fullLogsBeforeFilter = fullLogs;
+      const applySafetyFilter = (
+        logs: RawLogDocument[],
+        opts: { hasError?: boolean; errorCode?: string | null },
+      ): RawLogDocument[] => {
+        return logs.filter((log) => {
+          if (opts.hasError && !log.error) return false;
+          if (opts.errorCode && log.error?.code !== opts.errorCode) return false;
+          return true;
+        });
+      };
+
+      fullLogs = applySafetyFilter(fullLogs, {
+        hasError: metadata.hasError,
+        errorCode: metadata.errorCode,
       });
+      this.logger.log(
+        `Post-filter safety filter applied: before=${fullLogsBeforeFilter.length}, after=${fullLogs.length}, hasError=${metadata.hasError}, errorCode=${metadata.errorCode ?? 'null'}`,
+      );
       this.logger.log(`Filtered logs: ${JSON.stringify(fullLogs, null, 2)}`);
       if (fullLogs.length === 0) {
         this.logger.warn(
           `Post-filtering removed all results. Original count: ${eventIds.length}, Filtered: 0`,
         );
+
+        // Stepwise relaxation: errorCode -> hasError only -> no post-filter
+        if (metadata.errorCode && metadata.hasError) {
+          const relaxedHasErrorOnly = applySafetyFilter(fullLogsBeforeFilter, {
+            hasError: true,
+          });
+          this.logger.warn(
+            `Relaxation step A (drop errorCode, keep hasError) restored ${relaxedHasErrorOnly.length} logs`,
+          );
+          if (relaxedHasErrorOnly.length > 0) {
+            fullLogs = relaxedHasErrorOnly;
+          }
+        }
+
+        if (fullLogs.length === 0) {
+          const relaxedNoPostFilter = fullLogsBeforeFilter;
+          this.logger.warn(
+            `Relaxation step B (drop hasError) restored ${relaxedNoPostFilter.length} logs`,
+          );
+          if (relaxedNoPostFilter.length > 0) {
+            fullLogs = relaxedNoPostFilter;
+          }
+        }
+
+        if (fullLogs.length === 0) {
+          this.logger.warn(
+            `No logs available even after relaxation. Returning deterministic response.`,
+          );
+          const result: AnalysisResult = {
+            question: originalQuery,
+            intent: this.intent,
+            answer: SemanticQueryStrategy.NO_MATCHING_LOGS_MESSAGE,
+            sources: [],
+            confidence: 0,
+            sessionId,
+            viewType: 'chat',
+            createdAt: new Date().toISOString(),
+          };
+
+          if (sessionId) {
+            await this.sessionCache.updateSession(sessionId, result);
+          }
+
+          return result;
+        }
       }
     }
-
-    const requestIds = fullLogs.map((log) => log.requestId).filter(Boolean);
 
     const synthesisHistory = isStandalone ? [] : history;
 
@@ -205,10 +257,11 @@ export class SemanticQueryStrategy implements QueryStrategy {
       question: originalQuery,
       intent: this.intent,
       answer: finalAnswer,
-      sources: requestIds,
+      sources: this.toLogSources(fullLogs),
       confidence: finalConfidence,
       sessionId,
-      createdAt: new Date(),
+      viewType: 'chat',
+      createdAt: new Date().toISOString(),
     };
 
     if (sessionId) {
@@ -222,7 +275,7 @@ export class SemanticQueryStrategy implements QueryStrategy {
     query: string,
     answer: string,
     confidence: number,
-    fullLogs: any[],
+    fullLogs: RawLogDocument[],
   ): Promise<{ finalAnswer: string; finalConfidence: number }> {
     let finalAnswer = answer;
     let finalConfidence = confidence;
@@ -277,6 +330,29 @@ export class SemanticQueryStrategy implements QueryStrategy {
       sources: [],
       sessionId,
       confidence: 0,
+      viewType: 'chat',
     };
+  }
+
+  private toLogSources(fullLogs: RawLogDocument[]): LogSource[] {
+    return fullLogs
+      .filter((log) => Boolean(log.requestId))
+      .map((log) => ({
+        id: log.requestId,
+        summary: log._summary ?? '',
+        status: log.error ? 'FAILED' : 'SUCCESS',
+        route: log.route ?? '',
+        duration: log.performance?.durationMs ?? 0,
+        timestamp: this.toIsoString(log.timestamp),
+        errorCode: log.error?.code,
+        failedAt: log.failedAt,
+      }));
+  }
+
+  private toIsoString(value: Date): string {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString();
+    }
+    return new Date(0).toISOString();
   }
 }

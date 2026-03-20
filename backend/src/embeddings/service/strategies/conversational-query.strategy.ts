@@ -1,12 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SynthesisPort } from '@embeddings/out-ports';
 import { AnalysisResult } from '@embeddings/dtos';
-import {
-  AnalysisIntent,
-  CONVERSATIONAL_KEYWORDS,
-} from '@embeddings/value-objects/filter';
-import { SessionCacheService } from '@embeddings/service/sub-services';
-import { QueryStrategy, QueryContext } from './query-strategy.interface';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
+import { SessionCacheService } from '../../infrastructure/cache/session-cache.service';
+import { QueryStrategy, QueryContext } from '@embeddings/in-ports';
 
 /**
  * ConversationalQueryStrategy - Handles queries about the conversation itself.
@@ -24,18 +21,11 @@ export class ConversationalQueryStrategy implements QueryStrategy {
   private readonly logger = new Logger(ConversationalQueryStrategy.name);
 
   readonly intent = AnalysisIntent.CONVERSATIONAL;
-  readonly priority = 100; // Highest priority - check first
 
   constructor(
     private readonly synthesisPort: SynthesisPort,
     private readonly sessionCache: SessionCacheService,
   ) {}
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  canHandle(query: string, _history: AnalysisResult[]): boolean {
-    const lowerQuery = query.toLowerCase();
-    return CONVERSATIONAL_KEYWORDS.some((k) => lowerQuery.includes(k));
-  }
 
   async execute(context: QueryContext): Promise<AnalysisResult> {
     const { originalQuery, history, sessionId, targetLanguage } = context;
@@ -58,7 +48,8 @@ export class ConversationalQueryStrategy implements QueryStrategy {
         sources: [],
         confidence: 1,
         sessionId,
-        createdAt: new Date(),
+        viewType: 'chat',
+        createdAt: new Date().toISOString(),
       };
     }
 
@@ -80,7 +71,8 @@ export class ConversationalQueryStrategy implements QueryStrategy {
       sources: [],
       confidence,
       sessionId,
-      createdAt: new Date(),
+      viewType: 'chat',
+      createdAt: new Date().toISOString(),
     };
 
     if (sessionId) {

@@ -1,5 +1,10 @@
-import { LogEmbeddingEntity } from '@embeddings/domain';
+import {
+  LogEmbeddingEntity,
+  RawLogDocument,
+  VectorSearchResult,
+} from '@embeddings/domain';
 import { QueryMetadata } from '@embeddings/dtos';
+import { WideEvent } from '@logging/domain';
 
 /**
  * Watermark info for tracking embedding progress.
@@ -41,6 +46,7 @@ export abstract class LogStoragePort {
       model: string;
       service?: string;
       timestamp?: Date;
+      wideEvent?: WideEvent;
     }>,
     newWatermark: Watermark,
   ): Promise<void>;
@@ -57,12 +63,12 @@ export abstract class LogStoragePort {
     vector: number[],
     limit: number,
     metadata?: QueryMetadata,
-  ): Promise<any[]>;
+  ): Promise<VectorSearchResult[]>;
 
   /**
    * Retrieves full log documents by their internal IDs.
    */
-  abstract getLogsByEventIds(eventIds: any[]): Promise<any[]>;
+  abstract getLogsByEventIds(eventIds: unknown[]): Promise<RawLogDocument[]>;
 
   /**
    * Execute aggregation pipeline on a collection.
@@ -80,5 +86,5 @@ export abstract class LogStoragePort {
   /**
    * Grounding: Fetch full log documents by their request IDs.
    */
-  abstract findLogsByRequestIds(requestIds: string[]): Promise<any[]>;
+  abstract findLogsByRequestIds(requestIds: string[]): Promise<RawLogDocument[]>;
 }

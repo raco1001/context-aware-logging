@@ -242,7 +242,7 @@ async finalize(explicitContext?: LoggingContext): Promise<void> {
 - **관측 가능성**: 각 컴포넌트에 모니터링 메트릭 추가
 - **성능 개선**: 5 개 단위의 서비스 로직 요청에 로그데이터에 대해
   - 개선 전: 27 ~ 214ms
-  - 개선 후: < 1ms
+  - 개선 후: < 1ms (0ms)
 
 
 ### 부정적

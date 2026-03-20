@@ -23,6 +23,11 @@ export class LogEmbeddingEntity {
     public readonly summary: string,
     public readonly status: EmbeddingStatus,
     public readonly service?: string,
+    public readonly route?: string,
+    public readonly outcome?: string,
+    public readonly hasError?: boolean,
+    public readonly errorCode?: string,
+    public readonly failedAt?: string,
     public readonly model?: string,
     public readonly embedding?: number[],
     public readonly wideEvent?: WideEvent, // Full WideEvent for Dual-layer Summary generation

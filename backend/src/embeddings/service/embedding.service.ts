@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { EmbeddingUseCase } from '@embeddings/in-ports';
 import { EmbeddingPort, LogStoragePort } from '@embeddings/out-ports';
 import { chunkByFields, shouldChunk, Chunk } from '../core/utils/chunking.util';
-import { SummaryEnrichmentService } from './sub-services/summary-enrichment.service';
+import { SummaryEnrichmentService } from './summary-enrichment.service';
 
 /**
  * EmbeddingService - Service for embedding operations.
@@ -99,6 +99,7 @@ export class EmbeddingService extends EmbeddingUseCase {
           model: results[index].model,
           service: item.log.service,
           timestamp: item.log.timestamp,
+          wideEvent: item.log.wideEvent,
         }));
 
         const lastLog = chunk[chunk.length - 1];

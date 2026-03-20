@@ -14,6 +14,8 @@
       "@logging/infrastructure": ["libs/logging/infrastructure/index"],
       "@logging/service": ["libs/logging/service/index"],
       "@logging/presentation": ["libs/logging/presentation/index"],
+      "@contracts": ["libs/contracts/index"],
+      "@contracts/*": ["libs/contracts/*"],
 
       "@embeddings": ["src/embeddings/embeddings.module"],
       "@embeddings/domain": ["src/embeddings/core/domain/index"],
@@ -40,8 +42,8 @@
       "@embeddings/utils": ["src/embeddings/core/utils/index"],
       "@embeddings/infrastructure": ["src/embeddings/infrastructure/index"],
       "@embeddings/service": ["src/embeddings/service/index"],
-      "@embeddings/service/sub-services": [
-        "src/embeddings/service/sub-services/index"
+      "@embeddings/service/preprocessing": [
+        "src/embeddings/service/preprocessing/index"
       ],
       "@embeddings/presentation": ["src/embeddings/presentation/index"],
 

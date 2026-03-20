@@ -7,12 +7,20 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Consumer } from 'kafkajs';
 import { MongoLogger, KafkaConsumerClient } from '@logging/infrastructure';
-import { WideEvent, LoggingContext } from '@logging/domain';
+import { validateWideEvent, WideEvent, LoggingContext } from '@logging/domain';
 import { LoggingMode } from '../../core/domain/logging-mode.enum';
 import { LoggingModeService } from '../logging-mode.service';
 
 interface LogMessage {
-  event: WideEvent;
+  event: {
+    requestId: string;
+    timestamp: string | Date;
+    service: string;
+    route: string;
+    user?: { id: string; role: string };
+    error?: { code: string; message: string };
+    performance?: { durationMs: number };
+  };
   _metadata: LoggingContext['_metadata'];
   summary: string;
   timestamp: string;
@@ -40,12 +48,23 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
   private readonly topic: string;
   private readonly batchSize: number;
   private readonly batchTimeoutMs: number;
+  private readonly serviceAllowlist: readonly string[];
   private isRunning = false;
   private batch: LogMessage[] = [];
   private batchTimeout: NodeJS.Timeout | null = null;
   private watchdogTimer: NodeJS.Timeout | null = null;
   private consecutiveSuccessCount = 0;
   private readonly STABILITY_THRESHOLD = 3;
+  private rejectedCount = 0;
+  private lastRejectSample:
+    | {
+        reason: 'VALIDATION_FAILED';
+        requestId?: string;
+        service?: string;
+        route?: string;
+        errorCount: number;
+      }
+    | undefined;
 
   constructor(
     private readonly ConsumerClient: KafkaConsumerClient,
@@ -62,6 +81,14 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<string>('MQ_BATCH_TIMEOUT_MS') || '1000',
       10,
     );
+
+    const allowlistRaw = this.configService.get<string>('LOG_SERVICE_ALLOWLIST');
+    this.serviceAllowlist = allowlistRaw
+      ? allowlistRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : [];
 
     // 🔥 상태 변경 감지 - 모드가 변경되면 Consumer를 생성/파괴
     this.loggingModeService.onModeChange((mode) => {
@@ -314,11 +341,52 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
     const startTime = Date.now();
     let successCount = 0;
     let failureCount = 0;
+    let rejectedInBatch = 0;
 
     for (const message of batch) {
       try {
+        const wideEvent = WideEvent.fromDocument(message.event);
+        const validation = await validateWideEvent(wideEvent, {
+          serviceAllowlist: this.serviceAllowlist,
+        });
+
+        if (validation.warnings.length > 0) {
+          // Warn-only rules (e.g., allowlist) should not drop data at current scale.
+          this.logger.warn(
+            JSON.stringify({
+              reason: 'VALIDATION_WARNING',
+              requestId: wideEvent.requestId,
+              service: wideEvent.service,
+              route: wideEvent.route,
+              warnings: validation.warnings,
+            }),
+          );
+        }
+
+        if (!validation.ok) {
+          this.rejectedCount++;
+          rejectedInBatch++;
+          this.lastRejectSample = {
+            reason: 'VALIDATION_FAILED',
+            requestId: wideEvent.requestId,
+            service: wideEvent.service,
+            route: wideEvent.route,
+            errorCount: validation.errors.length,
+          };
+          this.logger.error(
+            JSON.stringify({
+              reason: 'VALIDATION_FAILED',
+              requestId: wideEvent.requestId,
+              service: wideEvent.service,
+              route: wideEvent.route,
+              errors: validation.errors,
+            }),
+          );
+          continue;
+        }
+
         await this.mongoLogger.log(
-          message.event,
+          wideEvent,
           message._metadata,
           message.summary,
         );
@@ -334,7 +402,23 @@ export class MqConsumerService implements OnModuleInit, OnModuleDestroy {
 
     const duration = Date.now() - startTime;
     this.logger.log(
-      `Processed batch: ${batch.length} events (${successCount} success, ${failureCount} failures) in ${duration}ms`,
+      `Processed batch: ${batch.length} events (${successCount} success, ${failureCount} failures, ${rejectedInBatch} rejected) in ${duration}ms`,
     );
+  }
+
+  getValidationStats(): {
+    rejectedCount: number;
+    lastRejectSample?: {
+      reason: 'VALIDATION_FAILED';
+      requestId?: string;
+      service?: string;
+      route?: string;
+      errorCount: number;
+    };
+  } {
+    return {
+      rejectedCount: this.rejectedCount,
+      lastRejectSample: this.lastRejectSample,
+    };
   }
 }

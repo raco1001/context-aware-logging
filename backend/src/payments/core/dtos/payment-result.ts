@@ -4,6 +4,7 @@ export abstract class PaymentResult {
   orderId?: string;
   errorCode?: string;
   errorMessage?: string;
+  stepsReached?: number;
 
   /**
    * Additional metadata for logging/debugging (extracted by @LogResponseMeta)

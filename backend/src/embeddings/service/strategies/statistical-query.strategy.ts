@@ -4,19 +4,19 @@ import {
   SynthesisPort,
   LogStoragePort,
 } from '@embeddings/out-ports';
-import { AnalysisResult } from '@embeddings/dtos';
 import {
-  AnalysisIntent,
-  STATISTIC_KEYWORDS,
-  AGGREGATION_KEYWORDS,
-} from '@embeddings/value-objects/filter';
-import {
-  QueryPreprocessorService,
-  AggregationService,
-  SessionCacheService,
-  SemanticCacheService,
-} from '@embeddings/service/sub-services';
-import { QueryStrategy, QueryContext } from './query-strategy.interface';
+  AnalysisResult,
+  LogSource,
+  LogStats,
+  RouteMetric,
+  StatsPayload,
+} from '@embeddings/dtos';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
+import { SessionCacheService } from '../../infrastructure/cache/session-cache.service';
+import { SemanticCacheService } from '../../infrastructure/cache/semantic-cache.service';
+import { AggregationService } from '../aggregation.service';
+import { QueryPreprocessorService } from '../preprocessing';
+import { QueryStrategy, QueryContext } from '@embeddings/in-ports';
 
 /**
  * StatisticalQueryStrategy - Handles statistical/aggregation queries.
@@ -33,7 +33,6 @@ export class StatisticalQueryStrategy implements QueryStrategy {
   private readonly logger = new Logger(StatisticalQueryStrategy.name);
 
   readonly intent = AnalysisIntent.STATISTICAL;
-  readonly priority = 20; // Higher priority than semantic
 
   constructor(
     private readonly embeddingPort: EmbeddingPort,
@@ -44,15 +43,6 @@ export class StatisticalQueryStrategy implements QueryStrategy {
     private readonly sessionCache: SessionCacheService,
     private readonly semanticCache: SemanticCacheService,
   ) {}
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  canHandle(query: string, _history: AnalysisResult[]): boolean {
-    const lowerQuery = query.toLowerCase();
-    return (
-      AGGREGATION_KEYWORDS.some((k) => lowerQuery.includes(k)) ||
-      STATISTIC_KEYWORDS.some((k) => lowerQuery.includes(k))
-    );
-  }
 
   async execute(context: QueryContext): Promise<AnalysisResult> {
     const {
@@ -123,23 +113,19 @@ export class StatisticalQueryStrategy implements QueryStrategy {
         verificationContext,
       );
 
-      const requestIds = aggregationResults
-        ? aggregationResults
-            .flatMap((result: any) =>
-              result.examples
-                ? result.examples.map((ex: any) => ex.requestId)
-                : [],
-            )
-            .filter(Boolean)
-        : [];
+      const statsPayload = this.buildStatsPayload(aggregationResults);
+      const sources = this.toLogSourcesFromAggregation(aggregationResults);
 
       const result: AnalysisResult = {
         question: originalQuery,
         intent: this.intent,
         answer: finalAnswer,
-        sources: requestIds,
+        sources,
         confidence: finalConfidence,
         sessionId,
+        viewType: 'chat+analytics',
+        statsPayload,
+        createdAt: new Date().toISOString(),
       };
 
       if (sessionId) {
@@ -255,5 +241,111 @@ export class StatisticalQueryStrategy implements QueryStrategy {
     }
 
     return { finalAnswer, finalConfidence };
+  }
+
+  private buildStatsPayload(aggregationResults: any[]): StatsPayload {
+    const results = Array.isArray(aggregationResults) ? aggregationResults : [];
+    const overview: Partial<LogStats> = {};
+    const routes: RouteMetric[] = [];
+
+    for (const row of results) {
+      if (
+        typeof row?.totalCount === 'number' &&
+        typeof row?.errorCount === 'number'
+      ) {
+        const totalRequests = row.totalCount;
+        const failedRequests = row.errorCount;
+        const successRate =
+          typeof row.errorRate === 'number'
+            ? 1 - row.errorRate
+            : totalRequests > 0
+              ? (totalRequests - failedRequests) / totalRequests
+              : 0;
+
+        overview.totalRequests = totalRequests;
+        overview.failedRequests = failedRequests;
+        overview.successRate = this.normalizeRate(successRate);
+      }
+
+      if (typeof row?.avg === 'number') {
+        overview.averageDurationMs = row.avg;
+      }
+
+      if (typeof row?.route === 'string' && typeof row?.count === 'number') {
+        routes.push({
+          route: row.route,
+          failed: row.count,
+        });
+      }
+    }
+
+    const hasOverview =
+      typeof overview.totalRequests === 'number' ||
+      typeof overview.failedRequests === 'number' ||
+      typeof overview.successRate === 'number' ||
+      typeof overview.averageDurationMs === 'number';
+
+    return {
+      overview: hasOverview
+        ? {
+            totalRequests: overview.totalRequests ?? 0,
+            failedRequests: overview.failedRequests ?? 0,
+            successRate: overview.successRate ?? 0,
+            averageDurationMs: overview.averageDurationMs ?? 0,
+          }
+        : undefined,
+      routes: routes.length > 0 ? routes : undefined,
+      raw: results,
+    };
+  }
+
+  private toLogSourcesFromAggregation(aggregationResults: any[]): LogSource[] {
+    const results = Array.isArray(aggregationResults) ? aggregationResults : [];
+    const sourceMap = new Map<string, LogSource>();
+
+    for (const row of results) {
+      const examples = Array.isArray(row?.examples) ? row.examples : [];
+      for (const ex of examples) {
+        const requestId =
+          typeof ex?.requestId === 'string' ? ex.requestId : undefined;
+        if (!requestId) continue;
+
+        sourceMap.set(requestId, {
+          id: requestId,
+          summary: typeof ex?.errorMessage === 'string' ? ex.errorMessage : '',
+          status: 'FAILED',
+          route: typeof ex?.route === 'string' ? ex.route : '',
+          duration: 0,
+          timestamp: this.toIsoString(ex?.timestamp),
+          errorCode:
+            typeof ex?.errorCode === 'string' ? ex.errorCode : undefined,
+          failedAt: typeof ex?.failedAt === 'string' ? ex.failedAt : undefined,
+        });
+      }
+    }
+
+    return Array.from(sourceMap.values());
+  }
+
+  private toIsoString(value: unknown): string {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString();
+    }
+
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString();
+      }
+    }
+
+    return new Date(0).toISOString();
+  }
+
+  private normalizeRate(value: number): number {
+    if (!Number.isFinite(value)) return 0;
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
   }
 }

@@ -55,7 +55,7 @@ export class MongoLogger extends LoggerPort implements OnModuleDestroy {
   ): Promise<void> {
     const document = {
       ...event,
-      timestamp: new Date(event.timestamp),
+      timestamp: event.timestamp,
       _metadata: _metadata,
       _summary: _summary,
     };

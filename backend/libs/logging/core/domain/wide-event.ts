@@ -1,4 +1,5 @@
 import {
+  IsDate,
   IsString,
   IsNotEmpty,
   IsOptional,
@@ -60,8 +61,28 @@ export class WideEventPerformance {
   @IsNumber()
   durationMs: number;
 
-  constructor(durationMs: number) {
+  @IsOptional()
+  @IsNumber()
+  balanceCheckMs?: number;
+
+  @IsOptional()
+  @IsNumber()
+  gatewayMs?: number;
+
+  @IsOptional()
+  @IsNumber()
+  orderConfirmationMs?: number;
+
+  constructor(
+    durationMs: number,
+    balanceCheckMs?: number,
+    gatewayMs?: number,
+    orderConfirmationMs?: number,
+  ) {
     this.durationMs = durationMs;
+    this.balanceCheckMs = balanceCheckMs;
+    this.gatewayMs = gatewayMs;
+    this.orderConfirmationMs = orderConfirmationMs;
   }
 }
 
@@ -77,9 +98,8 @@ export class WideEvent {
   @IsNotEmpty()
   public readonly requestId: string;
 
-  @IsString()
-  @IsNotEmpty()
-  public readonly timestamp: string;
+  @IsDate()
+  public readonly timestamp: Date;
 
   @IsString()
   @IsNotEmpty()
@@ -104,14 +124,24 @@ export class WideEvent {
   @Type(() => WideEventPerformance)
   public readonly performance?: WideEventPerformance;
 
+  @IsOptional()
+  @IsString()
+  public readonly failedAt?: string;
+
+  @IsOptional()
+  @IsNumber()
+  public readonly stepsReached?: number;
+
   constructor(
     requestId: string,
-    timestamp: string,
+    timestamp: Date,
     service: string,
     route: string,
     user?: WideEventUser,
     error?: WideEventError,
     performance?: WideEventPerformance,
+    failedAt?: string,
+    stepsReached?: number,
   ) {
     this.requestId = requestId;
     this.timestamp = timestamp;
@@ -120,6 +150,8 @@ export class WideEvent {
     this.user = user;
     this.error = error;
     this.performance = performance;
+    this.failedAt = failedAt;
+    this.stepsReached = stepsReached;
   }
 
   /**
@@ -137,8 +169,15 @@ export class WideEvent {
         ? new WideEventError(context.error.code, context.error.message)
         : undefined,
       context.performance
-        ? new WideEventPerformance(context.performance.durationMs)
+        ? new WideEventPerformance(
+            context.performance.durationMs,
+            context.performance.balanceCheckMs,
+            context.performance.gatewayMs,
+            context.performance.orderConfirmationMs,
+          )
         : undefined,
+      context.failedAt,
+      context.stepsReached,
     );
   }
 
@@ -153,12 +192,17 @@ export class WideEvent {
     route: string;
     user?: { id: string; role: string };
     error?: { code: string; message: string };
-    performance?: { durationMs: number };
+    failedAt?: string;
+    stepsReached?: number;
+    performance?: {
+      durationMs: number;
+      balanceCheckMs?: number;
+      gatewayMs?: number;
+      orderConfirmationMs?: number;
+    };
   }): WideEvent {
     const timestamp =
-      doc.timestamp instanceof Date
-        ? doc.timestamp.toISOString()
-        : doc.timestamp;
+      doc.timestamp instanceof Date ? doc.timestamp : new Date(doc.timestamp);
 
     return new WideEvent(
       doc.requestId,
@@ -170,8 +214,15 @@ export class WideEvent {
         ? new WideEventError(doc.error.code, doc.error.message)
         : undefined,
       doc.performance
-        ? new WideEventPerformance(doc.performance.durationMs)
+        ? new WideEventPerformance(
+            doc.performance.durationMs,
+            doc.performance.balanceCheckMs,
+            doc.performance.gatewayMs,
+            doc.performance.orderConfirmationMs,
+          )
         : undefined,
+      doc.failedAt,
+      doc.stepsReached,
     );
   }
 
@@ -191,8 +242,14 @@ export class WideEvent {
     const userRole = this.user?.role ?? 'ANONYMOUS';
     const latencyBucket = Latency.getBucket(this.performance?.durationMs);
     const outcome = this.determineOutcome(latencyBucket);
+    const failedAt = this.failedAt ?? 'NONE';
 
-    return `Outcome: ${outcome}, Service: ${this.service}, Route: ${this.route}, Error: ${errorCode}, ErrorMessage: ${errorMessage}, UserRole: ${userRole}, LatencyBucket: ${latencyBucket}`;
+    return `Outcome: ${outcome}, FailedAt: ${failedAt}, Service: ${this.service}, Route: ${this.route}, Error: ${errorCode}, ErrorMessage: ${errorMessage}, UserRole: ${userRole}, LatencyBucket: ${latencyBucket}`;
+  }
+
+  getOutcome(): string {
+    const latencyBucket = Latency.getBucket(this.performance?.durationMs);
+    return this.determineOutcome(latencyBucket);
   }
 
   /**

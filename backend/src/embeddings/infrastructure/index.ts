@@ -8,3 +8,5 @@ export * from './repository/mongodb/mongo.client';
 export * from './cache/in-memory/session-in-memory.adapter';
 export * from './cache/redis/redis.client';
 export * from './cache/redis/session-redis.adapter';
+export * from './cache/session-cache.service';
+export * from './cache/semantic-cache.service';

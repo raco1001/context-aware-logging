@@ -44,10 +44,9 @@ Phase 1의 핵심 목표는 전통적인 라인 단위 로깅(Line-based Logging
 ## 5. 추가 인사이트 (Additional Insights)
 
 - **로깅은 '운영'의 언어다**: 개발 단계에서는 `console.log`가 편할 수 있지만, 운영 단계에서는 구조화된 `Wide Event`만이 시스템의 문제를 가장 빠르게 설명해 주는 언어가 됩니다.
-- **RAG를 위한 빌드업**: AI는 구조화된 필드(JSON)뿐만 아니라 자연어 설명에도 강합니다. 따라서 로그에 담기는 `errorMessage`나 `metadata`의 서술형 텍스트 자체가 미래의 검색 성능을 결정짓는 핵심 자산임을 확인했습니다.
+- **RAG를 위한 빌드업**: AI는 구조화된 필드(JSON)뿐만 아니라 자연어 설명에도 강합니다. 따라서 로그에 담기는 `errorMessage`나 `metadata`의 서술형 텍스트 자체가 앞으로의 검색 성능을 결정짓는 핵심 자산임을 확인했습니다.
 
 ---
 
 **결과**: 2,000건의 부하 테스트 결과, 모든 요청이 누락 없이 고유한 `requestId`를 가진 Wide Event로 기록되었으며, 에러 상황에서도 풍부한 맥락(User context, Performance, Metadata)이 보존됨을 확인하며 Phase 1을 성공적으로 마무리했습니다.
 
-https://news.hada.io/topic?id=25239

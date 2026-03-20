@@ -210,6 +210,11 @@ export class LoggingInterceptor implements NestInterceptor {
               ...loggingContext._metadata,
               ...responseMeta,
             };
+
+            this.promoteMultiStepContextFromResponseMeta(
+              loggingContext,
+              responseMeta,
+            );
           }
         }),
         catchError((error) => {
@@ -220,6 +225,21 @@ export class LoggingInterceptor implements NestInterceptor {
             code: normalized.code,
             message: normalized.message,
           };
+
+          // Promote multi-step context for error responses as well.
+          // For business errors, HttpException.response may contain step metadata
+          // (e.g., stepsReached/errorService) that should be lifted to top-level fields.
+          const rawResponse = normalized?._errorMeta?.rawResponse;
+          if (rawResponse && typeof rawResponse === 'object') {
+            const responseMetaLike: Record<string, any> = {};
+            for (const [k, v] of Object.entries(rawResponse as any)) {
+              responseMetaLike[`response_${k}`] = v;
+            }
+            this.promoteMultiStepContextFromResponseMeta(
+              loggingContext,
+              responseMetaLike,
+            );
+          }
 
           // Store detailed error metadata separately
           loggingContext._metadata = {
@@ -345,6 +365,61 @@ export class LoggingInterceptor implements NestInterceptor {
     }
 
     return meta;
+  }
+
+  private promoteMultiStepContextFromResponseMeta(
+    loggingContext: any,
+    responseMeta: Record<string, any>,
+  ): void {
+    // Promotion rules (Pattern A):
+    // - failedAt comes from response_errorService if present
+    // - stepsReached prefers explicit response_stepsReached, else derived from success/errorService
+    // - gatewayMs is copied from response_gatewayProcessingTimeMs into performance.gatewayMs
+
+    const errorService = responseMeta.response_errorService;
+    if (typeof errorService === 'string' && errorService.trim().length > 0) {
+      loggingContext.failedAt = errorService;
+    }
+
+    const explicitSteps = responseMeta.response_stepsReached;
+    if (typeof explicitSteps === 'number' && Number.isFinite(explicitSteps)) {
+      loggingContext.stepsReached = explicitSteps;
+    } else {
+      const success = responseMeta.response_success;
+      if (success === true) {
+        loggingContext.stepsReached = 3;
+      } else if (typeof errorService === 'string') {
+        const derived = this.deriveStepsReachedFromErrorService(errorService);
+        if (derived !== undefined) {
+          loggingContext.stepsReached = derived;
+        }
+      }
+    }
+
+    const gatewayMs = responseMeta.response_gatewayProcessingTimeMs;
+    if (typeof gatewayMs === 'number' && Number.isFinite(gatewayMs)) {
+      loggingContext.performance = {
+        ...(loggingContext.performance || { durationMs: 0 }),
+        gatewayMs,
+      };
+    }
+  }
+
+  private deriveStepsReachedFromErrorService(service: string): number | undefined {
+    // payments flow steps:
+    // 1: payments (balanceCheck)
+    // 2: paymentGateway (gateway)
+    // 3: orders (orderConfirmation)
+    switch (service) {
+      case 'payments':
+        return 1;
+      case 'paymentGateway':
+        return 2;
+      case 'orders':
+        return 3;
+      default:
+        return undefined;
+    }
   }
 
   /**

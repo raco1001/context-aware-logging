@@ -101,6 +101,26 @@ To focus on core stability, the following are **deliberately deferred** to Phase
 
 ---
 
+## Validation & Quality (Syntax / Semantics)
+
+Phase 5 is also where the **Wide Event / canonical log line** becomes a production-grade contract rather than a best-effort structure.
+
+- **Syntactic validation**:
+  - Required fields such as `requestId`, `service`, `route`, `timestamp`, `statusCode`, and `durationMs` must be present and correctly typed.
+  - Enumerated fields (e.g., `environment`, `logLevel`, `channel`) are validated against a fixed set of values.
+  - Payloads that do not match the schema are marked as invalid and counted as a separate metric.
+- **Semantic validation**:
+  - Consistency checks between `statusCode` and `error.code` (e.g., 2xx responses should not carry fatal error codes).
+  - Threshold checks on `durationMs` and other numeric fields to detect obviously bad data (negative duration, impossible timestamps).
+  - Basic correlation checks for session/tenant identifiers when available.
+- **Handling bad or suspicious logs**:
+  - Non-conforming events are **not silently dropped**; they are either:
+    - Written into a dedicated “validation_error” collection with a `validationStatus` field, or
+    - Rejected and surfaced through metrics/dashboards so operators can see schema drift.
+  - This keeps the production pipeline trustworthy while still giving engineers visibility into malformed data.
+
+---
+
 ## Phase Boundary: To Phase 6
 
 Phase 5-A delivers a **Production-Grade Infrastructure**. Once complete, the system is ready for the "Intelligence" layer:

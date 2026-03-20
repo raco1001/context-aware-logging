@@ -40,6 +40,7 @@ export class PaymentsController {
   @LogRequestMeta(["body.product", "body.count", "body.amount"])
   @LogResponseMeta([
     "success",
+    "stepsReached",
     "transactionId",
     "orderId",
     "gatewayProcessingTimeMs",
