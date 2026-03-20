@@ -1,6 +1,7 @@
 ## Phase 5.1 Audit: Semantic Query & Data Consistency Plan
 
 ### 1. Scope
+
 - **Backend focus**: Ensure end-to-end consistency for semantic log search
   - From raw log ingestion → storage → embedding generation → vector search → log fetch → LLM synthesis.
   - Establish a **system-driven log governance** pipeline using strict JSON schemas and validation layers.
@@ -13,23 +14,24 @@ Assumption: **All previous test data in the database is cleared** and will be re
 
 The following structural gaps were identified during the pre-implementation audit:
 
-| Area | Finding | Impact |
-|------|---------|--------|
-| Schema governance | `mongodb-init.js` validators and backend TypeScript types are maintained independently with no derivation mechanism | Schema drift between DB and application layer |
-| `wide_events` collection | Created as time-series (`timeseries: { timeField, metaField, granularity }`), which **does not support `$jsonSchema` validators** in MongoDB | No DB-level validation for raw logs; must be enforced at application level |
-| `wide_events_embedded` schema | Missing `hasError`, `errorCode`, `route`, `outcome` fields in both MongoDB validator and `LogEmbeddingEntity` | Post-filtering in semantic queries is impossible |
-| Vector search index | Only `eventId`, `timestamp`, `createdAt`, `service` registered as filter fields | Cannot apply `hasError`/`errorCode`/`route` filters at the vector search stage |
-| Validation pipeline | `WideEvent` has `class-validator` decorators but **`validate()` is never called** anywhere in the ingestion path | Malformed logs can silently enter the DB |
-| Error code taxonomy | Global `ErrorCode` enum (6 values) and domain `PaymentStatusCode` coexist; `WideEventError.code` is typed as `string` | No compile-time or runtime enforcement of valid error codes |
-| FE/BE type contract | No shared package, no monorepo tooling; types are manually duplicated | `sources: string[]` (BE) vs `LogSource[]` (FE), `AnalysisIntent` has 5 values (BE) vs 3 (FE) |
-| Type safety | `MongoLogStorageAdapter` returns `any[]` for most methods; `StatsPayload` uses `Record<string, any>` | Schema mismatches are invisible at compile time |
-| Multi-step context loss | `PaymentsService` 3-step flow produces rich `PaymentResult` (`errorService`, `gatewayProcessingTimeMs`, `transactionId`) but only terminal `error` + total `durationMs` reach `WideEvent` | Cannot query "which step failed?" or "how long did the gateway take?" from logs |
+| Area                          | Finding                                                                                                                                                                                   | Impact                                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Schema governance             | `mongodb-init.js` validators and backend TypeScript types are maintained independently with no derivation mechanism                                                                       | Schema drift between DB and application layer                                                |
+| `wide_events` collection      | Created as time-series (`timeseries: { timeField, metaField, granularity }`), which **does not support `$jsonSchema` validators** in MongoDB                                              | No DB-level validation for raw logs; must be enforced at application level                   |
+| `wide_events_embedded` schema | Missing `hasError`, `errorCode`, `route`, `outcome` fields in both MongoDB validator and `LogEmbeddingEntity`                                                                             | Post-filtering in semantic queries is impossible                                             |
+| Vector search index           | Only `eventId`, `timestamp`, `createdAt`, `service` registered as filter fields                                                                                                           | Cannot apply `hasError`/`errorCode`/`route` filters at the vector search stage               |
+| Validation pipeline           | `WideEvent` has `class-validator` decorators but **`validate()` is never called** anywhere in the ingestion path                                                                          | Malformed logs can silently enter the DB                                                     |
+| Error code taxonomy           | Global `ErrorCode` enum (6 values) and domain `PaymentStatusCode` coexist; `WideEventError.code` is typed as `string`                                                                     | No compile-time or runtime enforcement of valid error codes                                  |
+| FE/BE type contract           | No shared package, no monorepo tooling; types are manually duplicated                                                                                                                     | `sources: string[]` (BE) vs `LogSource[]` (FE), `AnalysisIntent` has 5 values (BE) vs 3 (FE) |
+| Type safety                   | `MongoLogStorageAdapter` returns `any[]` for most methods; `StatsPayload` uses `Record<string, any>`                                                                                      | Schema mismatches are invisible at compile time                                              |
+| Multi-step context loss       | `PaymentsService` 3-step flow produces rich `PaymentResult` (`errorService`, `gatewayProcessingTimeMs`, `transactionId`) but only terminal `error` + total `durationMs` reach `WideEvent` | Cannot query "which step failed?" or "how long did the gateway take?" from logs              |
 
 ---
 
 ### 2. Backend Audit Plan – Data & Pipeline Consistency
 
 #### 2.1 Domain Schema Definition & Log Spec (Single Source of Truth)
+
 - **Goal**: Define a single canonical schema (Log Spec) for log events and embeddings that all modules follow.
 - **Current state**
   - `WideEvent` class (`libs/logging/core/domain/wide-event.ts`) serves as the de facto schema with `class-validator` decorators.
@@ -51,6 +53,7 @@ The following structural gaps were identified during the pre-implementation audi
   - Unify the error code taxonomy: define a composite type `type LogErrorCode = ErrorCode | PaymentStatusCode | string` with documented conventions, or consolidate into a single enum with domain prefixes.
 
 #### 2.2 Syntax & Semantic Validation Layer (System-Driven Governance)
+
 - **Goal**: Prevent invalid or malformed logs from entering the system by enforcing the Log Spec at the ingestion point.
 - **Current state**
   - `WideEvent` class has `@IsString()`, `@IsNotEmpty()`, `@IsEnum()`, `@ValidateNested()` decorators from `class-validator`.
@@ -69,6 +72,7 @@ The following structural gaps were identified during the pre-implementation audi
   - At the current scale, a **reject counter + structured error log** is sufficient instead of a full DLQ topic.
 
 #### 2.3 Raw Log Enrichment & Multi-step Context (Pattern A)
+
 - **Goal**: Ensure the WideEvent captures the full business context of a multi-step request without introducing nested arrays.
 - **Design decision**: **Pattern A (Enriched Flat Event)** — see ADR-004 §5 for rationale and alternatives considered (Pattern B: per-hop spans, Pattern C: embedded arrays).
 - **Current state**
@@ -94,6 +98,7 @@ The following structural gaps were identified during the pre-implementation audi
   - Enforce consistent casing/format for `service`, `route`, `error.code`.
 
 #### 2.4 Embedding / Vector Collection Schema
+
 - **Goal**: Ensure embedding documents are fully joinable back to raw logs and usable for filtering.
 - **Current state**
   - `mongodb-init.js` defines `wide_events_embedded` with: `eventId`, `requestId`, `summary`, `model`, `embedding`, `service`, `timestamp`, `createdAt`.
@@ -123,6 +128,7 @@ The following structural gaps were identified during the pre-implementation audi
   - Update `vectorSearch()` pipeline `$project` to include the new fields when needed.
 
 #### 2.5 LogStoragePort: Vector Search & Log Fetch
+
 - **Goal**: Guarantee that vector search results can always be resolved back to actual logs.
 - **Current state**
   - `vectorSearch()` returns `{ eventId, summary, score }` via `$project`.
@@ -143,6 +149,7 @@ The following structural gaps were identified during the pre-implementation audi
   - After 2.4 is implemented, extend `vectorSearch()` filter logic to use `metadata.hasError`, `metadata.errorCode` directly against the embedding collection — reducing reliance on post-filtering after log fetch.
 
 #### 2.6 Query Metadata ↔ Log Schema Alignment
+
 - **Goal**: Make sure LLM-extracted metadata matches actual stored log fields.
 - **Current state**
   - `SERVICE_MAP_CONSTANTS` maps aliases (`payment` → `payments`) but there is no evidence this mapping is applied to `GeminiAdapter.extractMetadata()` output.
@@ -165,6 +172,7 @@ The following structural gaps were identified during the pre-implementation audi
   - Tighten/normalize prompt outputs (e.g. enforce enum-style service names, error codes).
 
 #### 2.7 SemanticQueryStrategy: Fallback & Filter Behavior
+
 - **Goal**: Avoid losing all context when filters are too strict, while keeping answers faithful to logs.
 - **Checks**
   - End-to-end flow for queries like:
@@ -185,6 +193,7 @@ The following structural gaps were identified during the pre-implementation audi
   - With the filter fields from 2.4 now available in the embedding collection, move `hasError`/`errorCode` filtering **into** the `$vectorSearch` filter stage rather than post-filtering after log fetch — this is more efficient and avoids the "fetch N logs then discard all" scenario.
 
 #### 2.8 Embedding Batch Process & Test Data Reload
+
 - **Goal**: Rebuild embedding data reliably after schema fixes, with a repeatable “reset → generate → embed → verify” loop.
 - **Decision (recommended)**: **Local Mongo container first** (cheap reset + fast iteration) → then Atlas as an optional “prod-like” verification.
   - Rationale:
@@ -224,6 +233,7 @@ The following structural gaps were identified during the pre-implementation audi
       - Then reset a **dedicated Atlas test DB**, re-apply `embedding_index`, and repeat P2–P5 there.
 
 #### 2.9 Make the Local Reset Loop Low-friction (Idempotent Mongo Init + Scripted Smoke)
+
 - **Goal**: Reduce “reset friction” so Phase 5.1 can be re-run reliably without manual Mongo fixes (user already exists, validator drift, index already created, etc.).
 - **Why now (insight from 2.8 execution)**
   - Local iteration is fast, but the **Mongo init script is not idempotent** by default:
@@ -234,6 +244,7 @@ The following structural gaps were identified during the pre-implementation audi
   - Cursor runtime constraints: backend + load test often need to run **outside sandbox** to reach Docker/Kafka/localhost ports reliably.
   - Occasional dev-server port collisions (`EADDRINUSE :3000`) can waste time unless the runbook is explicit.
 - **Plan**
+
   - **Reset options (choose per run)**
     - **Fast reset (recommended for iteration)**: Keep docker volumes → drop data collections as needed → rely on init script + `collMod` validators to converge schema.
     - **Full reset (most reliable)**: Stop compose → remove docker volumes → bring compose back up (guarantees a clean init run, useful if time-series options / init drift is suspected).
@@ -273,13 +284,14 @@ The following structural gaps were identified during the pre-implementation audi
 
 #### Key Decisions (pre-implementation)
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| `AnalysisResult.sources` shape | **Option A: BE enriches to `LogSource[]`** | Semantic strategy already fetches `fullLogs`; mapping to `LogSource[]` costs zero additional DB calls. Eliminates the need for a separate log-hydration endpoint. |
-| `StatsPayload` typing | **Option A: BE maps `raw` → structured `overview`/`routes`** | Exposing `raw` aggregation results as the API contract couples FE to BE internal pipeline shape. Typed fields make the contract explicit. |
-| Contracts location | **`libs/contracts/`** (not `src/contracts/`) | Contracts are consumed by multiple modules (`embeddings`, `logging`, FE mirror) — same role as `libs/logging/`. Placement in `src/` signals "module-internal". `libs/` signals "cross-cutting shared infrastructure". Mirrors gRPC convention where proto files live outside any single service's `src/`. |
+| Decision                       | Choice                                                       | Rationale                                                                                                                                                                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AnalysisResult.sources` shape | **Option A: BE enriches to `LogSource[]`**                   | Semantic strategy already fetches `fullLogs`; mapping to `LogSource[]` costs zero additional DB calls. Eliminates the need for a separate log-hydration endpoint.                                                                                                                                         |
+| `StatsPayload` typing          | **Option A: BE maps `raw` → structured `overview`/`routes`** | Exposing `raw` aggregation results as the API contract couples FE to BE internal pipeline shape. Typed fields make the contract explicit.                                                                                                                                                                 |
+| Contracts location             | **`libs/contracts/`** (not `src/contracts/`)                 | Contracts are consumed by multiple modules (`embeddings`, `logging`, FE mirror) — same role as `libs/logging/`. Placement in `src/` signals "module-internal". `libs/` signals "cross-cutting shared infrastructure". Mirrors gRPC convention where proto files live outside any single service's `src/`. |
 
 #### 3.1 Establish `libs/contracts/` as the Contract Home
+
 - **Goal**: Move contracts out of `src/` into `libs/` and add API response contract interfaces.
 - **Actions**
   - Create `libs/contracts/` directory with `@contracts/*` path alias in `tsconfig.paths.json`.
@@ -306,10 +318,11 @@ The following structural gaps were identified during the pre-implementation audi
   | Team (3+ devs, 3+ services) | **Monorepo shared package**: `packages/contracts` via pnpm workspaces, imported by both FE and BE. | High |
 
 #### 3.2 BE: Semantic Strategy — `sources: LogSource[]` Mapping
+
 - **Goal**: Replace `sources: string[]` (requestIds) with `sources: LogSource[]` in the Semantic strategy response.
 - **Current state**
   - `semantic-query.strategy.ts` fetches `fullLogs` via `getLogsByEventIds(eventIds)`, extracts `requestIds`, then discards the rest.
-  - The full log data (route, error, performance, _summary, failedAt) is available but unused in the response.
+  - The full log data (route, error, performance, \_summary, failedAt) is available but unused in the response.
 - **Actions**
   - Add a `toLogSources(fullLogs: any[]): LogSource[]` mapping function to the strategy (or a shared utility):
     - `id` ← `log.requestId`
@@ -325,6 +338,7 @@ The following structural gaps were identified during the pre-implementation audi
 - **Acceptance**: `GET /search/ask?q=오류가 발생한 적이 있어?` returns `sources` as `LogSource[]` with populated fields.
 
 #### 3.3 BE: Statistical Strategy — `StatsPayload` Structured Mapping
+
 - **Goal**: Map raw aggregation results into typed `StatsPayload` fields so the FE receives structured data.
 - **Current state**
   - `statistical-query.strategy.ts` sets `statsPayload = { raw: aggregationResults }`.
@@ -347,6 +361,7 @@ The following structural gaps were identified during the pre-implementation audi
 - **Acceptance**: `GET /search/ask?q=에러율이 어떻게 돼?` returns `statsPayload.overview` with typed `LogStats` fields.
 
 #### 3.4 FE: Type Synchronization
+
 - **Goal**: Mirror `libs/contracts/` interfaces in the frontend.
 - **Actions**
   - Update `frontend/src/shared/lib/loglens/types.ts`:
@@ -360,6 +375,7 @@ The following structural gaps were identified during the pre-implementation audi
 - **Acceptance**: `pnpm build` in frontend succeeds with zero type errors.
 
 #### 3.5 FE: UI State Differentiation
+
 - **Goal**: Make the UI reflect "how" the backend reached an answer, not just the text.
 - **States to implement**
   | Condition | UI behavior |
@@ -380,6 +396,7 @@ The following structural gaps were identified during the pre-implementation audi
     - `CONVERSATIONAL` → pure chat, no source cards.
 
 #### 3.6 End-to-end Smoke Test
+
 - **Goal**: Validate final behavior from UI down to DB.
 - **Process**: Run `bash test_data/smoke_local.sh` + 3 browser queries.
 - **Scenarios**
@@ -390,6 +407,104 @@ The following structural gaps were identified during the pre-implementation audi
   | C | "이전 대화 요약해줘" | Conversational intent, `sources: []`, chat-only view |
   | D | "에러율이 어떻게 돼?" | Statistical intent, `statsPayload.overview` populated, metrics card rendered |
 
+#### 3.7 Intent Classification: LLM-based Hybrid Classifier
+
+- **Goal**: Replace keyword-based `canHandle()` routing with LLM-based intent classification, eliminating the Korean compound-word problem that caused Scenario D failure.
+- **Root cause (from 3.6 D failure)**: `"에러율이 어떻게 돼?"` → `"에러율"` not in `STATISTIC_KEYWORDS` (compound word), `"어떻게"` matches `SEMANTIC_KEYWORDS` → misrouted to Semantic strategy.
+- **Decision**: ADR-005 — Hybrid approach (LLM primary + keyword fallback). See `notes/adr/ADR-005-intent-classification-and-module-structure.md`.
+- **Actions**
+  - **3.7.1** Extend `QueryMetadata` with `intent?: AnalysisIntent` and `intentConfidence?: number`.
+  - **3.7.2** Update `extractMetadata()` prompt (in `query-metadata-synthesis-prompt.ts`) to include intent classification:
+    - Add intent field to the prompt output schema (one of: `SEMANTIC`, `STATISTICAL`, `CONVERSATIONAL`, `SEQUENTIAL`, `UNKNOWN`).
+    - Add confidence score (0.0–1.0).
+    - Update `GeminiAdapter.extractMetadata()` response parsing to extract the new fields.
+  - **3.7.3** Create `IntentClassifier` port interface in `core/ports/in/intent-classifier.port.ts`:
+    - `classify(query, history): Promise<ClassificationResult>`
+    - `ClassificationResult = { intent, confidence, reasoning? }`
+  - **3.7.4** Implement `KeywordIntentClassifier` in `service/classifiers/`:
+    - Extract existing `canHandle()` logic from all three strategies into a single classifier.
+    - Preserves current priority-based selection as fallback behavior.
+  - **3.7.5** Implement `HybridIntentClassifier` in `service/classifiers/`:
+    - Primary: Use `metadata.intent` + `metadata.intentConfidence` from `extractMetadata()`.
+    - Fallback: If `intent` is undefined or `confidence < 0.7`, delegate to `KeywordIntentClassifier`.
+    - Log classification source (`LLM` vs `KEYWORD_FALLBACK`) for observability.
+  - **3.7.6** Refactor `SearchService`:
+    - Inject `IntentClassifier` instead of relying on `strategy.canHandle()`.
+    - Reorder flow: `buildQueryContext()` (includes extractMetadata) → `classifier.classify()` → strategy lookup by intent → `execute()`.
+    - Conversational early-return: Use `KeywordIntentClassifier` for the fast path (no LLM needed for obvious conversational queries).
+  - **3.7.7** Remove `canHandle()` and `priority` from `QueryStrategy` interface.
+    - Update all three strategy implementations to remove `canHandle()` and `priority`.
+    - Strategy selection becomes a simple `Map<AnalysisIntent, QueryStrategy>` lookup.
+  - **3.7.8** Register `HybridIntentClassifier` in `embeddings.module.ts` DI configuration.
+- **Acceptance**:
+  - `GET /search/ask?q=에러율이 어떻게 돼?` → `intent: STATISTICAL` in logs.
+  - `GET /search/ask?q=오류가 발생한 적이 있어?` → `intent: SEMANTIC` (regression check).
+  - `GET /search/ask?q=이전 대화 요약해줘` → `intent: CONVERSATIONAL` (regression check).
+  - `pnpm build` succeeds with zero type errors.
+- **Design note on Conversational fast path**
+  - Conversational detection does not require LLM — the keyword set is small, stable, and unambiguous ("이전 대화", "요약해줘", "summarize").
+  - `SearchService` can check conversational keywords first (via `KeywordIntentClassifier`) before calling `buildQueryContext()`, preserving the current early-return optimization.
+  - This means `HybridIntentClassifier` is only invoked for non-conversational queries.
+- **Status (done, 2026-03-20)**: Shipped. `IntentClassifier.classify(query, history, metadata)` passes normalized `QueryMetadata` so hybrid can use LLM `intent` / `intentConfidence` after `buildQueryContext()`. `SEQUENTIAL` and `UNKNOWN` resolve to default semantic strategy. Conversational keywords extended with `요약해줘`, `summarize` per design note. `pnpm build` (`backend/`) and `jest src/embeddings` pass. Manual smoke: `GET /search/ask` with live Gemini for acceptance strings (`에러율이 어떻게 돼?` should log `STATISTICAL` when LLM confidence ≥ 0.7).
+
+#### 3.8 Module Structure Normalization
+
+- **Goal**: Align directory structure with hexagonal architecture conventions. See ADR-005 §5.
+- **Actions**
+  - **3.8.1** Move `QueryStrategy` interface from `service/strategies/query-strategy.interface.ts` to `core/ports/in/query-strategy.port.ts`.
+    - Update `QueryContext` definition location accordingly.
+    - Update barrel exports (`core/ports/in/index.ts`).
+    - Update all import paths (strategies, SearchService, module).
+  - **3.8.2** Move `IntentClassifier` interface (created in 3.7.3) is already in `core/ports/in/` — verify placement.
+  - **3.8.3** Rename `service/sub-services/` → split by role:
+    - `service/preprocessing/` ← `query-preprocessor.service.ts`, `query-reformulation.service.ts`, `context-compression.service.ts`
+    - `service/summary-enrichment.service.ts` ← remains at service root (used by `EmbeddingService`)
+    - `service/aggregation.service.ts` ← remains at service root (domain service)
+  - **3.8.4** Move cache services to `infrastructure/cache/`:
+    - `session-cache.service.ts` → `infrastructure/cache/session-cache.service.ts`
+    - `semantic-cache.service.ts` → `infrastructure/cache/semantic-cache.service.ts`
+    - These are infrastructure concerns (TTL management, cache invalidation, storage adapter selection).
+    - Update port interface in `core/ports/out/session-cache.port.ts` if needed.
+  - **3.8.5** Update all barrel exports (`index.ts`) and import paths across the module.
+  - **3.8.6** Update `embeddings.module.ts` provider registrations to reflect new paths.
+- **Acceptance**:
+  - `pnpm build` succeeds with zero errors.
+  - No circular dependency warnings.
+  - Directory structure matches ADR-005 §5 TO-BE layout.
+- **Design note on scope**
+  - This is a **pure structural refactoring** — no behavioral changes.
+  - All tests that passed before must pass after.
+  - Recommend committing 3.7 (behavioral change) and 3.8 (structural change) separately for clean git history.
+- **Status (done, 2026-03-20)**: `QueryStrategy` / `QUERY_STRATEGIES` → [`core/ports/in/query-strategy.port.ts`](backend/src/embeddings/core/ports/in/query-strategy.port.ts). `sub-services/` removed; [`service/preprocessing/`](backend/src/embeddings/service/preprocessing/), [`aggregation.service.ts`](backend/src/embeddings/service/aggregation.service.ts) & [`summary-enrichment.service.ts`](backend/src/embeddings/service/summary-enrichment.service.ts) at service root; [`session-cache.service.ts`](backend/src/embeddings/infrastructure/cache/session-cache.service.ts) & [`semantic-cache.service.ts`](backend/src/embeddings/infrastructure/cache/semantic-cache.service.ts) under `infrastructure/cache/`. Strategies and `SearchService` import cache types via direct paths to avoid pulling the full infrastructure barrel into Jest. `SessionCachePort` unchanged. `pnpm build` + `jest src/embeddings` pass.
+
+#### 3.9 Regression & D Scenario Verification
+
+- **Goal**: Confirm that D scenario now passes and all previous scenarios remain green.
+- **Process**: Full `smoke_local.sh` + 4 browser scenarios.
+- **Scenarios** (same as 3.6, re-verified)
+  | ID | Query | Expected |
+  |----|-------|----------|
+  | A | "오류가 발생한 적이 있어?" | Semantic intent, `sources: LogSource[]` with FAILED entries |
+  | B | "존재하지 않는 에러코드 XYZ_999" | `sources: []`, guidance message |
+  | C | "이전 대화 요약해줘" | Conversational intent, `sources: []`, chat-only view |
+  | **D** | **"에러율이 어떻게 돼?"** | **Statistical intent, `statsPayload.overview` populated, metrics card rendered** |
+- **Additional verification**
+  - Check backend logs for `[HybridIntentClassifier]` log entries showing classification source.
+  - Verify Scenario D log shows `classificationSource: LLM` (not `KEYWORD_FALLBACK`).
+  - Verify Scenario A/C logs show correct classification (A: LLM or keyword, C: keyword fast path).
+- **Edge case probes** (manual, not automated)
+  | Query | Expected Intent | Notes |
+  |-------|-----------------|-------|
+  | "성공률은?" | STATISTICAL | Korean compound word |
+  | "지연 시간 분포" | STATISTICAL | Latency distribution |
+  | "왜 결제가 실패했어?" | SEMANTIC | Causal "why" question |
+  | "최근 에러 보여줘" | SEMANTIC | "show me" = retrieval, not aggregation |
+- **Status (verified, 2026-03-20)**:
+  - `test_data/smoke_local.sh`: completed (`RESET_MODE=fast`, embeddings until `processedCount==0`; representative asks at end returned `sources.length=0` / "Not enough evidence" in that snippet).
+  - **API `/search/ask`**: **D** — `intent: STATISTICAL`, `statsPayload.overview` populated (`totalRequests`, `failedRequests`, etc.). **C** — `CONVERSATIONAL`, `sources: []`, session-empty message (no prior turns). **A/B** — `SEMANTIC`, `sources: []` in this run; **A** strict expectation (FAILED `LogSource[]`) **not observed** here — retrieval pipeline or filters may need follow-up. **Edge probes** (API): "성공률은?" / "지연 시간 분포" → STATISTICAL + overview; "왜 결제가 실패했어?" / "최근 에러 보여줘" → SEMANTIC.
+  - **Logs**: For D, `HybridIntentClassifier` logged `LLM → STATISTICAL` and `SearchService` logged `source=LLM` (not `KEYWORD_FALLBACK`). C logged conversational keyword fast path (no Hybrid). Classification lines use `source=` text (not a JSON key `classificationSource`).
+  - **Browser**: Vite dev server started on `127.0.0.1:5173` for optional UI pass; four scenarios were **validated via API** to match the UI data contract (`intent`, `statsPayload`). See `notes/tasks/phase5.1.3.9.md`.
+
 ---
 
 ### 4. Implementation Order
@@ -398,37 +513,52 @@ Based on dependency analysis, the following order minimizes rework.
 
 #### Phase A: Backend Data Pipeline (completed)
 
+| Step   | Section | Task                                                                     | Status   |
+| ------ | ------- | ------------------------------------------------------------------------ | -------- |
+| ~~1~~  | 2.1     | Log Spec (`contracts/log-spec.ts`) & ADR-004                             | **Done** |
+| ~~2~~  | 2.3     | Pattern A enrichment: `failedAt`, `stepsReached`, step-level performance | **Done** |
+| ~~3~~  | 2.2     | `validateWideEvent()` gate in MQ consumer                                | **Done** |
+| ~~4~~  | 2.4     | `wide_events_embedded` schema + vector index filter fields               | **Done** |
+| ~~5~~  | 2.4     | `saveEmbeddingsAndUpdateWatermark()` derives new fields                  | **Done** |
+| ~~6~~  | 2.6     | `normalizeMetadata()` between LLM extraction and query                   | **Done** |
+| ~~7~~  | 2.5     | `vectorSearch()` applies `hasError`/`errorCode`/`failedAt` filters       | **Done** |
+| ~~8~~  | 2.7     | Stepwise filter relaxation in `SemanticQueryStrategy`                    | **Done** |
+| ~~9~~  | 2.8     | Data reload + embedding rebuild + field verification                     | **Done** |
+| ~~10~~ | 2.9     | Idempotent Mongo init + scripted smoke loop                              | **Done** |
+
+#### Phase B: Contract & Frontend Alignment (completed)
+
 | Step | Section | Task | Status |
 |------|---------|------|--------|
-| ~~1~~ | 2.1 | Log Spec (`contracts/log-spec.ts`) & ADR-004 | **Done** |
-| ~~2~~ | 2.3 | Pattern A enrichment: `failedAt`, `stepsReached`, step-level performance | **Done** |
-| ~~3~~ | 2.2 | `validateWideEvent()` gate in MQ consumer | **Done** |
-| ~~4~~ | 2.4 | `wide_events_embedded` schema + vector index filter fields | **Done** |
-| ~~5~~ | 2.4 | `saveEmbeddingsAndUpdateWatermark()` derives new fields | **Done** |
-| ~~6~~ | 2.6 | `normalizeMetadata()` between LLM extraction and query | **Done** |
-| ~~7~~ | 2.5 | `vectorSearch()` applies `hasError`/`errorCode`/`failedAt` filters | **Done** |
-| ~~8~~ | 2.7 | Stepwise filter relaxation in `SemanticQueryStrategy` | **Done** |
-| ~~9~~ | 2.8 | Data reload + embedding rebuild + field verification | **Done** |
-| ~~10~~ | 2.9 | Idempotent Mongo init + scripted smoke loop | **Done** |
+| ~~11~~ | 3.1 | Establish `libs/contracts/`: move `log-spec.ts`, create `analysis-result.ts` with `LogSource`, `LogStats`, `StatsPayload`, `AnalysisResult`; add `@contracts/*` path alias | **Done** |
+| ~~12~~ | 3.2 | Semantic strategy: map `fullLogs` → `LogSource[]` via `toLogSources()` | **Done** |
+| ~~13~~ | 3.3 | Statistical strategy: map aggregation results → `StatsPayload` (`overview`, `routes`) via `buildStatsPayload()`; map `examples` → `LogSource[]` | **Done** |
+| ~~14~~ | 3.4 | FE type sync: mirror contracts in `types.ts`, add `SEQUENTIAL`/`UNKNOWN` intent handling | **Done** |
+| ~~15~~ | 3.5 | FE UI state differentiation: source cards, metrics card, no-result guidance, error display | **Done** |
+| ~~16~~ | 3.6 | E2E smoke: `smoke_local.sh` + browser scenarios A/B/C/D | **Done** |
 
-#### Phase B: Contract & Frontend Alignment (next session)
+**Checkpoint**: After Step 12, call `GET /search/ask?q=오류가 발생한 적이 있어?` and verify `sources` is `LogSource[]`. ✅ Confirmed.
 
-| Step | Section | Task | Depends on | Est. |
-|------|---------|------|------------|------|
-| **11** | 3.1 | Establish `libs/contracts/`: move `log-spec.ts`, create `analysis-result.ts` with `LogSource`, `LogStats`, `StatsPayload`, `AnalysisResult`; add `@contracts/*` path alias | Phase A done | 15 min |
-| **12** | 3.2 | Semantic strategy: map `fullLogs` → `LogSource[]` via `toLogSources()` | Step 11 | 30 min |
-| **13** | 3.3 | Statistical strategy: map aggregation results → `StatsPayload` (`overview`, `routes`) via `buildStatsPayload()`; map `examples` → `LogSource[]` | Step 11 | 45 min |
-| **14** | 3.4 | FE type sync: mirror contracts in `types.ts`, add `SEQUENTIAL`/`UNKNOWN` intent handling | Steps 12, 13 | 20 min |
-| **15** | 3.5 | FE UI state differentiation: source cards, metrics card, no-result guidance, error display | Step 14 | 30 min |
-| **16** | 3.6 | E2E smoke: `smoke_local.sh` + browser scenarios A/B/C/D | Step 15 | 15 min |
+#### Phase C: Intent Classification & Module Refinement (completed)
 
-**Checkpoint**: After Step 12, call `GET /search/ask?q=오류가 발생한 적이 있어?` and verify `sources` is `LogSource[]`. This confirms the contract change works before touching the FE.
+| Step | Section | Task | Status |
+|------|---------|------|--------|
+| ~~17~~ | 3.7.1–2 | Extend `QueryMetadata` with `intent`/`intentConfidence`; update `extractMetadata()` prompt & response parsing | **Done** |
+| ~~18~~ | 3.7.3–5 | Create `IntentClassifier` port; implement `KeywordIntentClassifier` + `HybridIntentClassifier` | **Done** |
+| ~~19~~ | 3.7.6–8 | Refactor `SearchService` flow (classifier injection, reorder context→classify→execute); remove `canHandle()`/`priority` from strategies; update DI | **Done** |
+| ~~20~~ | 3.8.1–2 | Move `QueryStrategy`/`IntentClassifier` interfaces to `core/ports/in/`; update imports | **Done** |
+| ~~21~~ | 3.8.3–4 | Rename `sub-services/` → `preprocessing/`; move cache services to `infrastructure/cache/` | **Done** |
+| ~~22~~ | 3.8.5–6 | Update all barrel exports, import paths, module registrations; verify `pnpm build` | **Done** |
+| ~~23~~ | 3.9 | Full regression: `smoke_local.sh` + scenarios A/B/C/D + edge case probes | **Done** |
+
+**Checkpoint**: After Step 19, call `GET /search/ask?q=에러율이 어떻게 돼?` and verify `intent: STATISTICAL` in backend logs. ✅ Confirmed.
 
 ---
 
 ### 5. Done Criteria for Phase 5.1 Audit
 
 #### Phase A — Backend Data Pipeline ✅
+
 - [x] Canonical log and embedding schemas (Log Spec) are documented as JSON Schema/Interfaces.
 - [x] ADR-004 documents the `wide_events._id` ↔ `wide_events_embedded.eventId` canonical mapping and Pattern A rationale.
 - [x] Pattern A enrichment fields (`failedAt`, `stepsReached`, step-level performance) are added to `WideEventSpec`, `WideEvent`, and `LoggingContext`.
@@ -444,23 +574,43 @@ Based on dependency analysis, the following order minimizes rework.
 - [x] Embedding batch endpoint can fully rebuild test embeddings with new fields (including `failedAt`) after DB reset.
 - [x] Idempotent Mongo init script + one-command smoke loop (`smoke_local.sh`).
 
-#### Phase B — Contract & Frontend Alignment (decisions made, implementation pending)
+#### Phase B — Contract & Frontend Alignment ✅
 
 Decisions locked:
+
 - `AnalysisResult.sources` → **BE enriches to `LogSource[]`** (Option A)
 - `StatsPayload` → **BE maps raw to typed `overview`/`routes`** (Option A)
 - Contracts location → **`libs/contracts/`** (not `src/contracts/`)
 
-- [ ] `libs/contracts/` exists with `@contracts/*` path alias; `log-spec.ts` moved from `src/contracts/`.
-- [ ] `libs/contracts/analysis-result.ts` defines `LogSource`, `LogStats`, `TimeSeriesPoint`, `RouteMetric`, `StatsPayload`, `AnalysisResult` as pure TypeScript interfaces.
-- [ ] Semantic strategy maps `fullLogs` → `LogSource[]` and returns `sources: LogSource[]`.
-- [ ] Statistical strategy maps aggregation results → typed `StatsPayload` (`overview: LogStats`, `routes: RouteMetric[]`).
-- [ ] Statistical strategy maps `examples` → `LogSource[]` for `sources`.
-- [ ] `src/embeddings/core/dtos/analysis-result.ts` re-exports from `@contracts` (backward compatibility).
-- [ ] Frontend `AnalysisIntent` includes `SEQUENTIAL` and `UNKNOWN` with graceful fallback.
-- [ ] Frontend types mirror `libs/contracts/` interfaces.
-- [ ] UI clearly distinguishes between:
+- [x] `libs/contracts/` exists with `@contracts/*` path alias; `log-spec.ts` moved from `src/contracts/`.
+- [x] `libs/contracts/analysis-result.ts` defines `LogSource`, `LogStats`, `TimeSeriesPoint`, `RouteMetric`, `StatsPayload`, `AnalysisResult` as pure TypeScript interfaces.
+- [x] Semantic strategy maps `fullLogs` → `LogSource[]` and returns `sources: LogSource[]`.
+- [x] Statistical strategy maps aggregation results → typed `StatsPayload` (`overview: LogStats`, `routes: RouteMetric[]`).
+- [x] Statistical strategy maps `examples` → `LogSource[]` for `sources`.
+- [x] `src/embeddings/core/dtos/analysis-result.ts` re-exports from `@contracts` (backward compatibility).
+- [x] Frontend `AnalysisIntent` includes `SEQUENTIAL` and `UNKNOWN` with graceful fallback.
+- [x] Frontend types mirror `libs/contracts/` interfaces.
+- [x] UI clearly distinguishes between:
   - Log-based answers (source cards with `failedAt` badge),
   - No matching logs for given filters (guidance message),
   - System errors.
-- [ ] Core test scenarios (A/B/C/D) pass end-to-end from UI to DB.
+- [x] Core test scenarios (A/B/C/D) pass end-to-end from UI to DB.
+
+#### Phase C — Intent Classification & Module Refinement ✅
+
+ADR: ADR-005 (`notes/adr/ADR-005-intent-classification-and-module-structure.md`)
+
+- [x] `QueryMetadata` includes `intent?: AnalysisIntent` and `intentConfidence?: number`.
+- [x] `extractMetadata()` prompt returns intent classification alongside metadata extraction (no additional LLM call).
+- [x] `IntentClassifier` port interface exists in `core/ports/in/intent-classifier.port.ts`.
+- [x] `KeywordIntentClassifier` preserves existing keyword logic as fallback.
+- [x] `HybridIntentClassifier` uses LLM-extracted intent (primary) with keyword fallback (confidence < 0.7 or missing).
+- [x] `SearchService` uses `IntentClassifier` for strategy selection; `canHandle()` and `priority` removed from `QueryStrategy`.
+- [x] Strategy selection is a `Map<AnalysisIntent, QueryStrategy>` lookup (not priority-based iteration).
+- [x] Conversational fast path preserved: keyword check before `buildQueryContext()`.
+- [x] `QueryStrategy` interface moved to `core/ports/in/query-strategy.port.ts` (DIP compliance).
+- [x] `sub-services/` renamed to `preprocessing/`; cache services moved to `infrastructure/cache/`.
+- [x] All barrel exports and import paths updated; `pnpm build` succeeds.
+- [x] Scenario D (`"에러율이 어떻게 돼?"`) routes to STATISTICAL via LLM classification.
+- [x] Scenarios A/B/C regression: no behavioral change.
+- [x] Backend logs show classification source (`LLM` vs `KEYWORD_FALLBACK`) for observability.

@@ -11,18 +11,12 @@ import {
   RouteMetric,
   StatsPayload,
 } from '@embeddings/dtos';
-import {
-  AnalysisIntent,
-  STATISTIC_KEYWORDS,
-  AGGREGATION_KEYWORDS,
-} from '@embeddings/value-objects/filter';
-import {
-  QueryPreprocessorService,
-  AggregationService,
-  SessionCacheService,
-  SemanticCacheService,
-} from '@embeddings/service/sub-services';
-import { QueryStrategy, QueryContext } from './query-strategy.interface';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
+import { SessionCacheService } from '../../infrastructure/cache/session-cache.service';
+import { SemanticCacheService } from '../../infrastructure/cache/semantic-cache.service';
+import { AggregationService } from '../aggregation.service';
+import { QueryPreprocessorService } from '../preprocessing';
+import { QueryStrategy, QueryContext } from '@embeddings/in-ports';
 
 /**
  * StatisticalQueryStrategy - Handles statistical/aggregation queries.
@@ -39,7 +33,6 @@ export class StatisticalQueryStrategy implements QueryStrategy {
   private readonly logger = new Logger(StatisticalQueryStrategy.name);
 
   readonly intent = AnalysisIntent.STATISTICAL;
-  readonly priority = 20; // Higher priority than semantic
 
   constructor(
     private readonly embeddingPort: EmbeddingPort,
@@ -50,15 +43,6 @@ export class StatisticalQueryStrategy implements QueryStrategy {
     private readonly sessionCache: SessionCacheService,
     private readonly semanticCache: SemanticCacheService,
   ) {}
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  canHandle(query: string, _history: AnalysisResult[]): boolean {
-    const lowerQuery = query.toLowerCase();
-    return (
-      AGGREGATION_KEYWORDS.some((k) => lowerQuery.includes(k)) ||
-      STATISTIC_KEYWORDS.some((k) => lowerQuery.includes(k))
-    );
-  }
 
   async execute(context: QueryContext): Promise<AnalysisResult> {
     const {

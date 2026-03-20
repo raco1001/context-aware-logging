@@ -28,7 +28,14 @@ export function RouteTableWidget({ data }: RouteTableProps) {
           </thead>
           <tbody>
             {data.map((route) => {
-              const errorPct = ((route.errors / route.requests) * 100).toFixed(1)
+              const total = route.total ?? 0
+              const failed = route.failed ?? 0
+              const averageDurationMs = route.averageDurationMs ?? 0
+              const derivedErrorPct =
+                total > 0 ? (failed / total) * 100 : undefined
+              const errorPct = (
+                derivedErrorPct ?? (route.successRate !== undefined ? 100 - route.successRate : 0)
+              ).toFixed(1)
               const errorLevel =
                 Number(errorPct) > 10
                   ? "text-destructive"
@@ -44,24 +51,24 @@ export function RouteTableWidget({ data }: RouteTableProps) {
                     {route.route}
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
-                    {(route.requests / 1000).toFixed(1)}k
+                    {total > 0 ? `${(total / 1000).toFixed(1)}k` : "N/A"}
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono text-destructive">
-                    {route.errors.toLocaleString()}
+                    {failed.toLocaleString()}
                   </td>
                   <td className={cn("py-2.5 px-3 text-right font-mono font-medium", errorLevel)}>
                     {errorPct}%
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
-                    {route.avgLatency}ms
+                    {route.averageDurationMs !== undefined ? `${averageDurationMs}ms` : "N/A"}
                   </td>
                   <td
                     className={cn(
                       "py-2.5 pl-3 text-right font-mono",
-                      route.p99Latency > 2000 ? "text-destructive" : "text-muted-foreground"
+                      averageDurationMs > 2000 ? "text-destructive" : "text-muted-foreground"
                     )}
                   >
-                    {route.p99Latency.toLocaleString()}ms
+                    {route.averageDurationMs !== undefined ? `${averageDurationMs.toLocaleString()}ms` : "N/A"}
                   </td>
                 </tr>
               )

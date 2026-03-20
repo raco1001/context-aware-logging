@@ -1,14 +1,21 @@
 import { Injectable, Logger, Inject } from "@nestjs/common";
-import { SearchUseCase } from "@embeddings/in-ports";
+import {
+  SearchUseCase,
+  INTENT_CLASSIFIER,
+  IntentClassifier,
+  QueryStrategy,
+  QueryContext,
+  QUERY_STRATEGIES,
+} from "@embeddings/in-ports";
 import { SynthesisPort } from "@embeddings/out-ports";
 import { AnalysisResult } from "@embeddings/dtos";
 import { AnalysisIntent } from "@embeddings/value-objects/filter";
+import { SessionCacheService } from "../infrastructure/cache/session-cache.service";
 import {
-  SessionCacheService,
   QueryReformulationService,
   ContextCompressionService,
-} from "@embeddings/service/sub-services";
-import { QueryStrategy, QueryContext, QUERY_STRATEGIES } from "./strategies";
+} from "./preprocessing";
+import { KeywordIntentClassifier } from "./classifiers";
 import { normalizeMetadata } from "@embeddings/utils";
 
 /**
@@ -16,26 +23,23 @@ import { normalizeMetadata } from "@embeddings/utils";
  *
  * Responsibilities:
  * - Prepare query context (history, reformulation, metadata)
- * - Select appropriate strategy based on query intent
- * - Delegate execution to the selected strategy
- *
- * This design follows Open/Closed Principle:
- * - New intent types can be added by creating new strategy classes
- * - No modification to SearchService required for new intents
+ * - Classify intent (hybrid LLM + keyword fallback)
+ * - Delegate execution to the strategy for that intent
  */
 @Injectable()
 export class SearchService extends SearchUseCase {
   private readonly logger = new Logger(SearchService.name);
 
-  /** Strategies sorted by priority (highest first) */
-  private readonly sortedStrategies: QueryStrategy[];
+  private readonly strategyByIntent: Map<AnalysisIntent, QueryStrategy>;
 
-  /** Default strategy for unknown intents */
   private readonly defaultStrategy: QueryStrategy;
 
   constructor(
     @Inject(QUERY_STRATEGIES)
     private readonly strategies: QueryStrategy[],
+    @Inject(INTENT_CLASSIFIER)
+    private readonly intentClassifier: IntentClassifier,
+    private readonly keywordIntentClassifier: KeywordIntentClassifier,
     private readonly synthesisPort: SynthesisPort,
     private readonly sessionCache: SessionCacheService,
     private readonly queryReformulation: QueryReformulationService,
@@ -43,12 +47,10 @@ export class SearchService extends SearchUseCase {
   ) {
     super();
 
-    // Sort strategies by priority (highest first)
-    this.sortedStrategies = [...strategies].sort(
-      (a, b) => b.priority - a.priority,
+    this.strategyByIntent = new Map(
+      strategies.map((s) => [s.intent, s] as const),
     );
 
-    // Find semantic strategy as default (for UNKNOWN intent)
     this.defaultStrategy =
       strategies.find((s) => s.intent === AnalysisIntent.SEMANTIC) ||
       strategies[0];
@@ -70,15 +72,15 @@ export class SearchService extends SearchUseCase {
     );
 
     try {
-      // 1. Load conversation history
       const history = await this.loadHistory(sessionId);
 
-      // 2. Select strategy based on query content
-      const strategy = this.selectStrategy(query, history);
-      this.logger.log(`Selected strategy: ${strategy.intent}`);
-
-      // 3. Handle conversational queries early (no reformulation needed)
-      if (strategy.intent === AnalysisIntent.CONVERSATIONAL) {
+      if (this.keywordIntentClassifier.isConversationalKeywordMatch(query)) {
+        const strategy = this.strategyByIntent.get(
+          AnalysisIntent.CONVERSATIONAL,
+        )!;
+        this.logger.log(
+          `Selected strategy: ${strategy.intent} (conversational keyword fast path)`,
+        );
         const context = this.buildConversationalContext(
           query,
           history,
@@ -87,10 +89,18 @@ export class SearchService extends SearchUseCase {
         return strategy.execute(context);
       }
 
-      // 4. Build full context for other strategies
       const context = await this.buildQueryContext(query, history, sessionId);
 
-      // 5. Execute selected strategy
+      const classification = await this.intentClassifier.classify(
+        query,
+        history,
+        context.metadata,
+      );
+      const strategy = this.resolveStrategy(classification.intent);
+      this.logger.log(
+        `Selected strategy: ${strategy.intent} (classified=${classification.intent}, source=${classification.source}, confidence=${classification.confidence})`,
+      );
+
       return strategy.execute(context);
     } catch (error) {
       const err = error as Error;
@@ -106,20 +116,14 @@ export class SearchService extends SearchUseCase {
     return this.sessionCache.getHistory(sessionId);
   }
 
-  /**
-   * Select the appropriate strategy for the query.
-   * Strategies are checked in priority order.
-   */
-  private selectStrategy(
-    query: string,
-    history: AnalysisResult[],
-  ): QueryStrategy {
-    for (const strategy of this.sortedStrategies) {
-      if (strategy.canHandle(query, history)) {
-        return strategy;
-      }
+  private resolveStrategy(intent: AnalysisIntent): QueryStrategy {
+    if (
+      intent === AnalysisIntent.SEQUENTIAL ||
+      intent === AnalysisIntent.UNKNOWN
+    ) {
+      return this.defaultStrategy;
     }
-    return this.defaultStrategy;
+    return this.strategyByIntent.get(intent) ?? this.defaultStrategy;
   }
 
   /**

@@ -48,6 +48,9 @@ export function HomePage() {
   >(generateTimeSeriesData())
   const [analyticsRoutes, setAnalyticsRoutes] =
     useState<RouteMetric[]>(MOCK_ROUTE_METRICS)
+  const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false)
+  const [showOverviewCard, setShowOverviewCard] = useState(false)
+  const [showRoutesPanel, setShowRoutesPanel] = useState(false)
 
   // Regenerate time series data on mount to ensure fresh data
   useEffect(() => {
@@ -116,22 +119,50 @@ export function HomePage() {
           setMessages((prev) => [...prev, errorMessage])
         } else {
           const result = data as AnalysisResult
+          const normalizedIntent =
+            result.intent === "SEQUENTIAL" ? "SEMANTIC" : result.intent
+          const normalizedViewType = result.viewType ?? "chat"
+          const hasSources = Array.isArray(result.sources) && result.sources.length > 0
+          const hasAnswer = Boolean(result.answer && result.answer.trim())
+          const noSourceGuidance =
+            hasAnswer && !hasSources ? "\n\n관련 로그를 찾지 못했습니다. 조건을 완화해서 다시 시도해 주세요." : ""
+          const fallbackAnswer =
+            normalizedIntent === "UNKNOWN"
+              ? "분석 의도를 파악하지 못했습니다. 에러 코드, 서비스, 시간 범위를 포함해 다시 질문해 주세요."
+              : "No results found."
           const aiMessage: ChatMessage = {
             id: `msg-${Date.now()}-ai`,
             role: "assistant",
-            content: result.answer || "No results found.",
+            content: `${result.answer || fallbackAnswer}${noSourceGuidance}`,
             timestamp: new Date(),
             sources: result.sources,
           }
           setMessages((prev) => [...prev, aiMessage])
 
-          // Update analytics state when backend indicates statistical intent
-          if (result.intent === "STATISTICAL" && result.statsPayload) {
+          const analyticsEnabledByViewType =
+            normalizedViewType === "analytics" || normalizedViewType === "chat+analytics"
+          const analyticsAvailable =
+            normalizedIntent === "STATISTICAL" &&
+            analyticsEnabledByViewType &&
+            Boolean(result.statsPayload)
+
+          setShowAnalyticsPanel(analyticsAvailable)
+
+          // Conversational/Semantic should stay chat-focused.
+          if (!analyticsAvailable) {
+            setShowOverviewCard(false)
+            setShowRoutesPanel(false)
+          }
+
+          if (analyticsAvailable && result.statsPayload) {
             if (result.statsPayload.overview) {
               setAnalyticsOverview((prev) => ({
                 ...(prev || MOCK_STATS),
                 ...(result.statsPayload!.overview as Partial<LogStats>),
               }))
+              setShowOverviewCard(true)
+            } else {
+              setShowOverviewCard(false)
             }
             if (result.statsPayload.timeseries) {
               setAnalyticsTimeseries(
@@ -142,6 +173,9 @@ export function HomePage() {
               setAnalyticsRoutes(
                 (result.statsPayload.routes as RouteMetric[]) || [],
               )
+              setShowRoutesPanel(true)
+            } else {
+              setShowRoutesPanel(false)
             }
           }
         }
@@ -326,20 +360,33 @@ export function HomePage() {
                       sessionId={sessionId ?? ""}
                     />
                   </div>
-                  <div className="flex flex-col gap-4 overflow-auto lg:col-span-2">
-                    {analyticsOverview && (
-                      <StatsOverviewWidget stats={analyticsOverview} />
-                    )}
-                    <div className="grid gap-4">
-                      <RequestVolumeChartWidget data={analyticsTimeseries} />
-                      <LatencyChartWidget data={analyticsTimeseries} />
+                  {showAnalyticsPanel ? (
+                    <div className="flex flex-col gap-4 overflow-auto lg:col-span-2">
+                      {showOverviewCard && analyticsOverview && (
+                        <StatsOverviewWidget stats={analyticsOverview} />
+                      )}
+                      <div className="grid gap-4">
+                        <RequestVolumeChartWidget data={analyticsTimeseries} />
+                        <LatencyChartWidget data={analyticsTimeseries} />
+                      </div>
+                      {showRoutesPanel && (
+                        <div className="grid gap-4">
+                          <StatusPieChartWidget data={MOCK_STATUS_DISTRIBUTION} />
+                          <RouteMetricsChartWidget data={analyticsRoutes} />
+                        </div>
+                      )}
+                      {showRoutesPanel && <RouteTableWidget data={analyticsRoutes} />}
                     </div>
-                    <div className="grid gap-4">
-                      <StatusPieChartWidget data={MOCK_STATUS_DISTRIBUTION} />
-                      <RouteMetricsChartWidget data={analyticsRoutes} />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center lg:col-span-2">
+                      <p className="text-sm font-medium text-foreground">
+                        Analytics panel is hidden for this response
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        통계형 응답(`STATISTICAL` + `analytics`/`chat+analytics`)일 때만 메트릭 패널이 표시됩니다.
+                      </p>
                     </div>
-                    <RouteTableWidget data={analyticsRoutes} />
-                  </div>
+                  )}
                 </div>
               </div>
             </div>

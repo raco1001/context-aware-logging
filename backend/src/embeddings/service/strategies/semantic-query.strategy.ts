@@ -7,16 +7,11 @@ import {
 } from '@embeddings/out-ports';
 import { AnalysisResult, LogSource } from '@embeddings/dtos';
 import { RawLogDocument, VectorSearchResult } from '@embeddings/domain';
-import {
-  AnalysisIntent,
-  SEMANTIC_KEYWORDS,
-} from '@embeddings/value-objects/filter';
-import {
-  QueryPreprocessorService,
-  SessionCacheService,
-  SemanticCacheService,
-} from '@embeddings/service/sub-services';
-import { QueryStrategy, QueryContext } from './query-strategy.interface';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
+import { SessionCacheService } from '../../infrastructure/cache/session-cache.service';
+import { SemanticCacheService } from '../../infrastructure/cache/semantic-cache.service';
+import { QueryPreprocessorService } from '../preprocessing';
+import { QueryStrategy, QueryContext } from '@embeddings/in-ports';
 
 /**
  * SemanticQueryStrategy - Handles semantic/vector-based queries.
@@ -37,7 +32,6 @@ export class SemanticQueryStrategy implements QueryStrategy {
     '지정한 조건에 맞는 로그를 찾지 못했습니다. 조건(에러 코드/오류 여부/시간 범위/서비스 등)을 완화해서 다시 질문해 주세요.';
 
   readonly intent = AnalysisIntent.SEMANTIC;
-  readonly priority = 10; // Lower priority than statistical
 
   constructor(
     private readonly embeddingPort: EmbeddingPort,
@@ -48,12 +42,6 @@ export class SemanticQueryStrategy implements QueryStrategy {
     private readonly sessionCache: SessionCacheService,
     private readonly semanticCache: SemanticCacheService,
   ) {}
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  canHandle(query: string, _history: AnalysisResult[]): boolean {
-    const lowerQuery = query.toLowerCase();
-    return SEMANTIC_KEYWORDS.some((k) => lowerQuery.includes(k));
-  }
 
   async execute(context: QueryContext): Promise<AnalysisResult> {
     const {

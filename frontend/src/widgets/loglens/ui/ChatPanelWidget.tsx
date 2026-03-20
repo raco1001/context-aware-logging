@@ -23,13 +23,11 @@ interface ChatPanelProps {
   sessionId: string
 }
 
-function StatusIcon({ status }: { status: string }) {
+function StatusIcon({ status }: { status: LogSource["status"] }) {
   switch (status) {
-    case "ERROR":
+    case "FAILED":
       return <AlertCircle className="size-3.5 text-destructive" />
-    case "WARN":
-      return <AlertCircle className="size-3.5 text-warning" />
-    case "INFO":
+    case "SUCCESS":
       return <CheckCircle2 className="size-3.5 text-success" />
     default:
       return <Info className="size-3.5 text-muted-foreground" />
@@ -37,6 +35,7 @@ function StatusIcon({ status }: { status: string }) {
 }
 
 function SourceCard({ source }: { source: LogSource }) {
+  const isFailed = source.status === "FAILED"
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/50 p-3 transition-colors hover:bg-muted">
       <div className="flex items-center justify-between">
@@ -45,10 +44,8 @@ function SourceCard({ source }: { source: LogSource }) {
           <span
             className={cn(
               "text-xs font-medium font-mono",
-              source.status === "ERROR"
+              source.status === "FAILED"
                 ? "text-destructive"
-                : source.status === "WARN"
-                ? "text-warning"
                 : "text-success"
             )}
           >
@@ -60,6 +57,20 @@ function SourceCard({ source }: { source: LogSource }) {
         </span>
       </div>
       <p className="text-xs text-foreground leading-relaxed">{source.summary}</p>
+      {isFailed && (source.failedAt || source.errorCode) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {source.failedAt && (
+            <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-mono text-destructive">
+              failedAt: {source.failedAt}
+            </span>
+          )}
+          {source.errorCode && (
+            <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-mono text-warning">
+              errorCode: {source.errorCode}
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="font-mono">{source.route}</span>
         <span className="flex items-center gap-1">

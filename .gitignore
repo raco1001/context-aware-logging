@@ -9,7 +9,6 @@
 */**/test
 */**/logs/*
 */**/dist
-test_data/payments_data.json
 */**/.env
 docs/ko/audit
 .pnpm-store/
@@ -17,3 +16,4 @@ slide.md
 frontend-temp
 notes/interview
 notes/tasks
+test_data/payments_data.json

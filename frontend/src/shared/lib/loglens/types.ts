@@ -9,10 +9,12 @@ export interface ChatMessage {
 export interface LogSource {
   id: string
   summary: string
-  status: string
+  status: 'SUCCESS' | 'FAILED'
   route: string
   duration: number
   timestamp: string
+  errorCode?: string
+  failedAt?: string
 }
 
 export interface ChatSession {
@@ -25,18 +27,16 @@ export interface ChatSession {
 
 export interface LogStats {
   totalRequests: number
-  errorRate: number
-  avgLatency: number
-  p99Latency: number
-  totalErrors: number
+  failedRequests: number
   successRate: number
+  averageDurationMs: number
 }
 
 export interface TimeSeriesPoint {
-  time: string
-  requests: number
-  errors: number
-  latency: number
+  bucket: string
+  total: number
+  failed: number
+  averageDurationMs?: number
 }
 
 export interface StatusDistribution {
@@ -47,13 +47,18 @@ export interface StatusDistribution {
 
 export interface RouteMetric {
   route: string
-  requests: number
-  errors: number
-  avgLatency: number
-  p99Latency: number
+  total?: number
+  failed?: number
+  successRate?: number
+  averageDurationMs?: number
 }
 
-export type AnalysisIntent = 'SEMANTIC' | 'STATISTICAL' | 'CONVERSATIONAL'
+export type AnalysisIntent =
+  | 'SEMANTIC'
+  | 'STATISTICAL'
+  | 'SEQUENTIAL'
+  | 'CONVERSATIONAL'
+  | 'UNKNOWN'
 
 export type ViewType = 'chat' | 'analytics' | 'chat+analytics'
 
@@ -61,8 +66,7 @@ export interface StatsPayload {
   overview?: LogStats
   timeseries?: TimeSeriesPoint[]
   routes?: RouteMetric[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  raw?: any
+  raw?: unknown
 }
 
 export interface AnalysisResult {

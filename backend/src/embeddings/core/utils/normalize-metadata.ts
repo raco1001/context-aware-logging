@@ -1,5 +1,6 @@
 import { QueryMetadata } from '@embeddings/dtos';
 import { SERVICE_MAP_CONSTANTS } from '@embeddings/value-objects/constants';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
 
 function safeDateOrNull(value: unknown): Date | null {
   if (!value) return null;
@@ -52,6 +53,31 @@ function normalizeRoute(raw: string | null): string | null {
   return pathOnly;
 }
 
+function normalizeIntentFields(
+  intent: AnalysisIntent | undefined,
+  intentConfidence: number | undefined,
+): Pick<QueryMetadata, 'intent' | 'intentConfidence'> {
+  let normalizedIntent = intent;
+  if (
+    normalizedIntent !== undefined &&
+    !Object.values(AnalysisIntent).includes(normalizedIntent)
+  ) {
+    normalizedIntent = undefined;
+  }
+  let confidence = intentConfidence;
+  if (confidence !== undefined) {
+    if (Number.isNaN(confidence)) {
+      confidence = undefined;
+    } else {
+      confidence = Math.max(0, Math.min(1, confidence));
+    }
+  }
+  return {
+    ...(normalizedIntent !== undefined ? { intent: normalizedIntent } : {}),
+    ...(confidence !== undefined ? { intentConfidence: confidence } : {}),
+  };
+}
+
 export function normalizeMetadata(raw: QueryMetadata): QueryMetadata {
   const startTime = safeDateOrNull(raw.startTime);
   const endTime = safeDateOrNull(raw.endTime);
@@ -69,6 +95,7 @@ export function normalizeMetadata(raw: QueryMetadata): QueryMetadata {
     route,
     errorCode,
     hasError,
+    ...normalizeIntentFields(raw.intent, raw.intentConfidence),
   };
 }
 

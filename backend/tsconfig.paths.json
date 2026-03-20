@@ -42,8 +42,8 @@
       "@embeddings/utils": ["src/embeddings/core/utils/index"],
       "@embeddings/infrastructure": ["src/embeddings/infrastructure/index"],
       "@embeddings/service": ["src/embeddings/service/index"],
-      "@embeddings/service/sub-services": [
-        "src/embeddings/service/sub-services/index"
+      "@embeddings/service/preprocessing": [
+        "src/embeddings/service/preprocessing/index"
       ],
       "@embeddings/presentation": ["src/embeddings/presentation/index"],
 

@@ -15,6 +15,10 @@ interface StatsOverviewProps {
 }
 
 export function StatsOverviewWidget({ stats }: StatsOverviewProps) {
+  const failedRequests = stats.failedRequests ?? 0
+  const errorRate =
+    stats.totalRequests > 0 ? ((failedRequests / stats.totalRequests) * 100).toFixed(1) : "0.0"
+
   const cards = [
     {
       label: "Total Requests",
@@ -26,15 +30,15 @@ export function StatsOverviewWidget({ stats }: StatsOverviewProps) {
     },
     {
       label: "Error Rate",
-      value: `${stats.errorRate}%`,
+      value: `${errorRate}%`,
       icon: AlertTriangle,
       accent: "text-destructive",
       bgAccent: "bg-destructive/10",
-      sub: `${stats.totalErrors.toLocaleString()} errors`,
+      sub: `${failedRequests.toLocaleString()} errors`,
     },
     {
       label: "Avg Latency",
-      value: `${stats.avgLatency}ms`,
+      value: `${stats.averageDurationMs}ms`,
       icon: Zap,
       accent: "text-success",
       bgAccent: "bg-success/10",
@@ -42,15 +46,15 @@ export function StatsOverviewWidget({ stats }: StatsOverviewProps) {
     },
     {
       label: "P99 Latency",
-      value: `${stats.p99Latency.toLocaleString()}ms`,
+      value: "N/A",
       icon: Clock,
       accent: "text-warning",
       bgAccent: "bg-warning/10",
-      sub: "Above threshold",
+      sub: "Not available",
     },
     {
       label: "Success Rate",
-      value: `${stats.successRate}%`,
+      value: `${stats.successRate.toFixed(1)}%`,
       icon: Gauge,
       accent: "text-success",
       bgAccent: "bg-success/10",

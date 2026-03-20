@@ -27,8 +27,8 @@ interface RequestVolumeChartProps {
 export function RequestVolumeChartWidget({ data }: RequestVolumeChartProps) {
   const chartConfig = useMemo(
     () => ({
-      requests: { label: "Requests", color: "#4cc9f0" },
-      errors: { label: "Errors", color: "#f87171" },
+      total: { label: "Requests", color: "#4cc9f0" },
+      failed: { label: "Errors", color: "#f87171" },
     }),
     []
   )
@@ -65,7 +65,7 @@ export function RequestVolumeChartWidget({ data }: RequestVolumeChartProps) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.24 0.012 260)" />
           <XAxis
-            dataKey="time"
+            dataKey="bucket"
             tick={{ fontSize: 10 }}
             tickLine={false}
             axisLine={false}
@@ -74,14 +74,14 @@ export function RequestVolumeChartWidget({ data }: RequestVolumeChartProps) {
           <ChartTooltip content={<ChartTooltipContent />} />
           <Area
             type="monotone"
-            dataKey="requests"
+            dataKey="total"
             stroke="#4cc9f0"
             fill="url(#requestGrad)"
             strokeWidth={2}
           />
           <Area
             type="monotone"
-            dataKey="errors"
+            dataKey="failed"
             stroke="#f87171"
             fill="url(#errorGrad)"
             strokeWidth={2}
@@ -99,7 +99,7 @@ interface LatencyChartProps {
 export function LatencyChartWidget({ data }: LatencyChartProps) {
   const chartConfig = useMemo(
     () => ({
-      latency: { label: "Avg Latency (ms)", color: "#a78bfa" },
+      averageDurationMs: { label: "Avg Latency (ms)", color: "#a78bfa" },
     }),
     []
   )
@@ -126,7 +126,7 @@ export function LatencyChartWidget({ data }: LatencyChartProps) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.24 0.012 260)" />
           <XAxis
-            dataKey="time"
+            dataKey="bucket"
             tick={{ fontSize: 10 }}
             tickLine={false}
             axisLine={false}
@@ -135,7 +135,7 @@ export function LatencyChartWidget({ data }: LatencyChartProps) {
           <ChartTooltip content={<ChartTooltipContent />} />
           <Area
             type="monotone"
-            dataKey="latency"
+            dataKey="averageDurationMs"
             stroke="#a78bfa"
             fill="url(#latencyGrad)"
             strokeWidth={2}
@@ -214,16 +214,16 @@ interface RouteMetricsChartProps {
 export function RouteMetricsChartWidget({ data }: RouteMetricsChartProps) {
   const chartConfig = useMemo(
     () => ({
-      requests: { label: "Requests", color: "#4cc9f0" },
-      errors: { label: "Errors", color: "#f87171" },
+      total: { label: "Requests", color: "#4cc9f0" },
+      failed: { label: "Errors", color: "#f87171" },
     }),
     []
   )
 
   const chartData = data.map((d) => ({
     route: d.route.split(" ")[1] || d.route,
-    requests: d.requests,
-    errors: d.errors,
+    total: d.total ?? 0,
+    failed: d.failed ?? 0,
   }))
 
   return (
@@ -243,8 +243,8 @@ export function RouteMetricsChartWidget({ data }: RouteMetricsChartProps) {
           />
           <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
           <ChartTooltip content={<ChartTooltipContent />} />
-          <Bar dataKey="requests" fill="#4cc9f0" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="errors" fill="#f87171" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="total" fill="#4cc9f0" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="failed" fill="#f87171" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ChartContainer>
     </div>

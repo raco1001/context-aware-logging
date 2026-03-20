@@ -1,4 +1,6 @@
 export const CONVERSATIONAL_KEYWORDS: string[] = [
+  '요약해줘',
+  'summarize',
   '방금',
   '이전',
   '질문',

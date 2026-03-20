@@ -47,11 +47,9 @@ export const MOCK_SESSIONS: ChatSession[] = [
 
 export const MOCK_STATS: LogStats = {
   totalRequests: 284_932,
-  errorRate: 3.2,
-  avgLatency: 245,
-  p99Latency: 1_820,
-  totalErrors: 9_118,
+  failedRequests: 9_118,
   successRate: 96.8,
+  averageDurationMs: 245,
 }
 
 export function generateTimeSeriesData(): TimeSeriesPoint[] {
@@ -69,10 +67,10 @@ export function generateTimeSeriesData(): TimeSeriesPoint[] {
       ? 200 + Math.floor(Math.random() * 150)
       : 120 + Math.floor(Math.random() * 80)
     data.push({
-      time: `${String(time.getHours()).padStart(2, '0')}:00`,
-      requests,
-      errors,
-      latency,
+      bucket: `${String(time.getHours()).padStart(2, '0')}:00`,
+      total: requests,
+      failed: errors,
+      averageDurationMs: latency,
     })
   }
   return data
@@ -85,11 +83,11 @@ export const MOCK_STATUS_DISTRIBUTION: StatusDistribution[] = [
 ]
 
 export const MOCK_ROUTE_METRICS: RouteMetric[] = [
-  { route: 'POST /payments', requests: 142_000, errors: 5_680, avgLatency: 320, p99Latency: 2_100 },
-  { route: 'GET /payments/:id', requests: 89_000, errors: 890, avgLatency: 85, p99Latency: 450 },
-  { route: 'POST /refunds', requests: 28_000, errors: 1_400, avgLatency: 410, p99Latency: 2_800 },
-  { route: 'GET /health', requests: 18_932, errors: 0, avgLatency: 12, p99Latency: 45 },
-  { route: 'POST /webhooks', requests: 7_000, errors: 1_148, avgLatency: 180, p99Latency: 920 },
+  { route: 'POST /payments', total: 142_000, failed: 5_680, successRate: 96, averageDurationMs: 320 },
+  { route: 'GET /payments/:id', total: 89_000, failed: 890, successRate: 99, averageDurationMs: 85 },
+  { route: 'POST /refunds', total: 28_000, failed: 1_400, successRate: 95, averageDurationMs: 410 },
+  { route: 'GET /health', total: 18_932, failed: 0, successRate: 100, averageDurationMs: 12 },
+  { route: 'POST /webhooks', total: 7_000, failed: 1_148, successRate: 83, averageDurationMs: 180 },
 ]
 
 export const INITIAL_MESSAGES: ChatMessage[] = [

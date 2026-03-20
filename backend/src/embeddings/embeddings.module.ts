@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingUseCase, SearchUseCase } from '@embeddings/in-ports';
+import {
+  EmbeddingUseCase,
+  SearchUseCase,
+  INTENT_CLASSIFIER,
+  QUERY_STRATEGIES,
+} from '@embeddings/in-ports';
 import {
   EmbeddingPort,
   RerankPort,
@@ -12,20 +17,17 @@ import {
 import {
   EmbeddingService,
   SearchService,
-  QUERY_STRATEGIES,
   SemanticQueryStrategy,
   StatisticalQueryStrategy,
   ConversationalQueryStrategy,
-} from '@embeddings/service';
-import {
+  KeywordIntentClassifier,
+  HybridIntentClassifier,
   QueryPreprocessorService,
   SummaryEnrichmentService,
   AggregationService,
-  SessionCacheService,
   QueryReformulationService,
   ContextCompressionService,
-  SemanticCacheService,
-} from '@embeddings/service/sub-services';
+} from '@embeddings/service';
 import {
   VoyageAdapter,
   VoyageClient,
@@ -37,6 +39,8 @@ import {
   SessionInMemoryAdapter,
   RedisClient,
   SessionRedisAdapter,
+  SessionCacheService,
+  SemanticCacheService,
 } from '@embeddings/infrastructure';
 import {
   EmbeddingController,
@@ -129,6 +133,12 @@ import {
     SemanticQueryStrategy,
     StatisticalQueryStrategy,
     ConversationalQueryStrategy,
+    KeywordIntentClassifier,
+    HybridIntentClassifier,
+    {
+      provide: INTENT_CLASSIFIER,
+      useClass: HybridIntentClassifier,
+    },
     {
       provide: QUERY_STRATEGIES,
       useFactory: (

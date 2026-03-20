@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SynthesisPort } from '@embeddings/out-ports';
 import { QueryMetadata } from '@embeddings/dtos';
+import { AnalysisIntent } from '@embeddings/value-objects/filter';
 import { GeminiClient } from './gemini.client';
 import { AnalysisResult } from '@embeddings/dtos';
 import {
@@ -12,6 +13,31 @@ import {
   GroundingVerificationPrompt,
   LogStyleTransformationPrompt,
 } from 'src/embeddings/core/domain/prompts/implementations';
+
+function parseIntentFromMetadata(parsed: Record<string, unknown>): {
+  intent?: AnalysisIntent;
+  intentConfidence?: number;
+} {
+  const rawIntent = parsed.intent;
+  let intent: AnalysisIntent | undefined;
+  if (typeof rawIntent === 'string') {
+    const key = rawIntent.trim().toUpperCase();
+    if (key in AnalysisIntent) {
+      intent = AnalysisIntent[key as keyof typeof AnalysisIntent];
+    }
+  }
+  const rawConf = parsed.intentConfidence;
+  let intentConfidence: number | undefined;
+  if (typeof rawConf === 'number' && !Number.isNaN(rawConf)) {
+    intentConfidence = Math.max(0, Math.min(1, rawConf));
+  } else if (typeof rawConf === 'string') {
+    const n = parseFloat(rawConf);
+    if (!Number.isNaN(n)) {
+      intentConfidence = Math.max(0, Math.min(1, n));
+    }
+  }
+  return { intent, intentConfidence };
+}
 
 /**
  * GeminiAdapter - Adapter that performs actual Gemini API operations
@@ -43,15 +69,18 @@ export class GeminiAdapter extends SynthesisPort {
       const result = await jsonModel.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(text) as Record<string, unknown>;
       this.logger.debug(`Extracted metadata: ${JSON.stringify(parsed)}`);
+      const { intent, intentConfidence } = parseIntentFromMetadata(parsed);
       return {
-        startTime: parsed.startTime ? new Date(parsed.startTime) : null,
-        endTime: parsed.endTime ? new Date(parsed.endTime) : null,
-        service: parsed.service || null,
-        route: parsed.route || null,
-        errorCode: parsed.errorCode || null,
+        startTime: parsed.startTime ? new Date(String(parsed.startTime)) : null,
+        endTime: parsed.endTime ? new Date(String(parsed.endTime)) : null,
+        service: (parsed.service as string) || null,
+        route: (parsed.route as string) || null,
+        errorCode: (parsed.errorCode as string) || null,
         hasError: parsed.hasError === true || false,
+        intent,
+        intentConfidence,
       };
     } catch (error) {
       this.logger.error(`Metadata extraction failed: ${error.message}`);
