@@ -21,9 +21,7 @@ export class AggregationHelper {
 
     if (metadata.errorCode) {
       match['error.code'] = metadata.errorCode;
-    }
-
-    if (metadata.hasError !== undefined) {
+    } else if (metadata.hasError !== undefined) {
       if (metadata.hasError) {
         match['error.code'] = { $exists: true, $ne: null };
       } else {

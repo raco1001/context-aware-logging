@@ -152,9 +152,13 @@ export const METRIC_TEMPLATES: Record<string, IMetricTemplate> = {
     name: 'Error Rate Analysis',
     description: 'Calculates the ratio of errors to total requests.',
     requiredParams: [],
-    pipelineTemplate: (params) => [
+    pipelineTemplate: (params) => {
+      // Strip hasError/errorCode from match so the denominator includes ALL
+      // requests in the time window. errorCount is derived inside $group.
+      const { hasError: _h, errorCode: _e, ...baseMetadata } = params.metadata;
+      return [
       {
-        $match: AggregationHelper.buildMatchStage(params.metadata),
+        $match: AggregationHelper.buildMatchStage(baseMetadata),
       },
       {
         $group: {
@@ -181,6 +185,7 @@ export const METRIC_TEMPLATES: Record<string, IMetricTemplate> = {
           },
         },
       },
-    ],
+    ];
+    },
   },
 };

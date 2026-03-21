@@ -291,7 +291,7 @@ const chatHistorySchema = {
     sources: {
       bsonType: "array",
       description: "Sources of the answer",
-      items: { bsonType: "string", description: "Source of the answer" },
+      items: { bsonType: "object", description: "Source of the answer" },
     },
   },
 };

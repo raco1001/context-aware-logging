@@ -62,11 +62,11 @@ export function StatsOverviewWidget({ stats }: StatsOverviewProps) {
     },
     {
       label: "Error Trend",
-      value: "-4.9%",
+      value: "N/A",
       icon: TrendingDown,
-      accent: "text-success",
-      bgAccent: "bg-success/10",
-      sub: "vs. yesterday",
+      accent: "text-muted-foreground",
+      bgAccent: "bg-muted/50",
+      sub: "No data",
     },
   ]
 

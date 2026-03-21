@@ -30,4 +30,11 @@ export const STATISTIC_KEYWORDS: string[] = [
   '그룹',
   '집계',
   'aggregate',
+  '에러율',
+  '오류율',
+  '성공률',
+  '실패율',
+  'error rate',
+  'success rate',
+  'failure rate',
 ];

@@ -25,6 +25,16 @@ export interface ChatSession {
   messageCount: number
 }
 
+export interface SessionSummary {
+  sessionId: string
+  clientId?: string
+  title: string
+  lastMessage: string
+  messageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface LogStats {
   totalRequests: number
   failedRequests: number
@@ -66,6 +76,7 @@ export interface StatsPayload {
   overview?: LogStats
   timeseries?: TimeSeriesPoint[]
   routes?: RouteMetric[]
+  statusDistribution?: StatusDistribution[]
   raw?: unknown
 }
 
