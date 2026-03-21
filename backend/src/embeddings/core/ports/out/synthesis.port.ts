@@ -3,9 +3,13 @@ import { AnalysisResult } from '@embeddings/dtos';
 
 export abstract class SynthesisPort {
   /**
-   * Extracts metadata (time range, service, etc.) from a natural language query.
+   * Classifies a query intent and extracts all metadata in a single LLM call.
+   * Returns templateId (non-null = STATISTICAL) and query metadata.
    */
-  abstract extractMetadata(query: string): Promise<QueryMetadata>;
+  abstract classifyAndExtract(
+    query: string,
+    initialMetadata?: Partial<QueryMetadata>,
+  ): Promise<{ templateId: string | null; params: Record<string, any>; metadata: QueryMetadata }>;
 
   /**
    * Synthesizes a natural language answer based on the provided context.
@@ -38,18 +42,6 @@ export abstract class SynthesisPort {
    * @returns Concise summary of the conversation history
    */
   abstract summarizeHistory(history: AnalysisResult[]): Promise<string>;
-
-  /**
-   * Analyzes a natural language query for statistical intent and extracts parameters.
-   *
-   * @param query The natural language query
-   * @param initialMetadata Optional initial metadata extracted from the query (to avoid re-extraction)
-   * @returns The selected template ID and parameters
-   */
-  abstract analyzeStatisticalQuery(
-    query: string,
-    initialMetadata?: QueryMetadata,
-  ): Promise<{ templateId: string; params: Record<string, any> }>;
 
   /**
    * Verifies that a generated answer is strictly supported by the grounding context.

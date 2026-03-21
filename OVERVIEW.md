@@ -58,6 +58,8 @@ The logging system and storage architecture are built on the following pillars:
 | Phase 4 | RAG-powered log search and intelligent analysis system        | ✅     |
 | Phase 5 | Production Hardening: MQ, Caching, and Sampling strategies    | ✅     |
 
+**Current scope (repository)**: In addition to the phase goals above, the codebase includes a **LogLens** web client (session-based chat with the search API) and a **statistical analytics** path for metrics templates (e.g. error rate, latency percentiles): natural-language **query classification** extracts time bounds and filters; MongoDB aggregation builds **time-bucketed series** with **adaptive bucket width** for short windows so charts stay readable and bounded. Journals under `journals/` capture audit iterations (e.g. Phase 5.3).
+
 ---
 
 ## D. Architectural Philosophy
@@ -68,7 +70,7 @@ From **Phase 1**, this project adheres to the principles of **Hexagonal (Ports &
 
 - **Why?**: Since the project evolves through phases, it was crucial to keep the domain logic stable while swapping or adding external infrastructure (Outbound Adapters) like different storage types or message queues.
 - **Maintainability**: The focus is on readable, traceable code over premature performance optimization.
-- **Extensibility**: Different adapters can coexist or complement each other in the same runtime (see [Phase 6 docs](docs/en/06-phase-additional.md)).
+- **Extensibility**: Different adapters can coexist or complement each other in the same runtime (see [Phase 6 docs (EN)](docs/en/06-phase-additional.md)).
 
 ### D-2. Hardening & Infrastructure (Phase 5)
 
@@ -94,22 +96,28 @@ We verified the system through **Operational Scenarios** rather than just unit t
 - **Fault Tolerance**: Verified zero data loss during simulated Kafka failures via the Direct-to-DB fallback logic.
 - **Persistence**: Confirmed session data and Kafka-buffered logs were preserved across infrastructure restarts.
 
+### D-3. Frontend & Statistical UX (LogLens)
+
+The **LogLens** app (`frontend/`, React + Vite + Tailwind, Feature-Sliced layout) is a **demo client** for end-to-end validation: it calls the same `/search/ask` flows as curl, shows **grounded** narrative answers, and renders **live statistics** (overview cards, request volume vs errors over time, latency percentiles, half-window error trend) when the backend returns structured stats. It does not change the core thesis—architecture and observability first—but makes statistical and semantic results tangible without relying on terminal-only tests.
+
 ---
 
 ## E. Timeline & Tech Stack
 
 ### Project Timeline:
 
-- Dec 24, 2025 – Jan 05, 2026 (12 Days)
+- Initial focused build: Dec 24, 2025 – Jan 05, 2026 (12 days)
+- Subsequent work: ongoing (e.g. LogLens, statistical aggregation UX, audits documented in `journals/`)
 
 ### Tech Stack:
 
 - **Backend**: NestJS, TypeScript
+- **Frontend (demo UI)**: React, Vite, TypeScript, Tailwind CSS, Recharts (LogLens)
 - **Observability**: Custom Wide Event Context (AsyncLocalStorage)
-- **Storage**: Local (JSON), MongoDB (Time-series), Vector DB (Pinecone/Atlas)
-- **AI / RAG**: LLM (Gemini Flash 2.0 / VoyageAI) + Custom Backend Embedding Module
-- **Infra (Local)**: Docker Compose (MongoDB, Kafka, Zookeeper, Redis)
-- **Tooling**: Cursor, pnpm, Custom Test Utilities (Bash, JS)
+- **Storage**: Local (JSON), MongoDB (time-series `logs`), vector-capable embeddings (project uses MongoDB + embedding pipeline; provider may vary)
+- **AI / RAG**: LLM (Gemini Flash family) + VoyageAI embeddings + custom embeddings / search module
+- **Infra (local)**: Docker Compose (MongoDB, Kafka, Zookeeper, Redis)
+- **Tooling**: Cursor, pnpm, load generators under `test_data/`
 
 ---
 
@@ -124,7 +132,7 @@ We verified the system through **Operational Scenarios** rather than just unit t
 ❌ **This project IS NOT:**
 
 - A production-ready SaaS product.
-- A UI/UX-centric application.
+- A UI/UX–first or design-system showcase (LogLens is a thin client for validating search and stats).
 - A generic CRUD demo.
 - Optimized for raw performance above all else.
 
@@ -132,10 +140,10 @@ We verified the system through **Operational Scenarios** rather than just unit t
 
 ## G. Documentation
 
-For detailed design and implementation notes for each phase, please refer to the [docs/en](docs/en) directory.
+Phase-by-phase design notes: **[docs/en](docs/en)** (English) and **[docs/ko](docs/ko)** (Korean). Additional topics: [docs/en/06-phase-additional.md](docs/en/06-phase-additional.md), [docs/ko/06-phase-additional-ko.md](docs/ko/06-phase-additional-ko.md).
 
 ---
 
 ## H. Disclaimer
 
-This project prioritizes **architecture, security, and observability principles** over scale or UI completeness. Experimental features and further optimizations are continuously updated in the [Phase 6 documentation](docs/06-phase-additional.md).
+This project prioritizes **architecture, security, and observability principles** over scale or UI completeness. Experimental features and follow-on ideas are tracked in the Phase 6–style docs above and in `journals/`.

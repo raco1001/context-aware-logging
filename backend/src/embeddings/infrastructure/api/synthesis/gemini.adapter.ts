@@ -1,43 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SynthesisPort } from '@embeddings/out-ports';
 import { QueryMetadata } from '@embeddings/dtos';
-import { AnalysisIntent } from '@embeddings/value-objects/filter';
 import { GeminiClient } from './gemini.client';
 import { AnalysisResult } from '@embeddings/dtos';
 import {
-  QueryMetadataSynthesisPrompt,
+  QueryClassificationPrompt,
   SemanticSynthesisPrompt,
   QueryReformulationSynthesisPrompt,
   HistorySummarizationSynthesisPrompt,
-  StatisticalAnalysisPrompt,
   GroundingVerificationPrompt,
   LogStyleTransformationPrompt,
 } from 'src/embeddings/core/domain/prompts/implementations';
+import { normalizeMetadata } from '@embeddings/utils';
 
-function parseIntentFromMetadata(parsed: Record<string, unknown>): {
-  intent?: AnalysisIntent;
-  intentConfidence?: number;
-} {
-  const rawIntent = parsed.intent;
-  let intent: AnalysisIntent | undefined;
-  if (typeof rawIntent === 'string') {
-    const key = rawIntent.trim().toUpperCase();
-    if (key in AnalysisIntent) {
-      intent = AnalysisIntent[key as keyof typeof AnalysisIntent];
-    }
-  }
-  const rawConf = parsed.intentConfidence;
-  let intentConfidence: number | undefined;
-  if (typeof rawConf === 'number' && !Number.isNaN(rawConf)) {
-    intentConfidence = Math.max(0, Math.min(1, rawConf));
-  } else if (typeof rawConf === 'string') {
-    const n = parseFloat(rawConf);
-    if (!Number.isNaN(n)) {
-      intentConfidence = Math.max(0, Math.min(1, n));
-    }
-  }
-  return { intent, intentConfidence };
-}
 
 /**
  * GeminiAdapter - Adapter that performs actual Gemini API operations
@@ -49,66 +24,36 @@ export class GeminiAdapter extends SynthesisPort {
 
   constructor(
     private readonly geminiClient: GeminiClient,
-    private readonly queryMetadataPrompt: QueryMetadataSynthesisPrompt,
+    private readonly queryClassificationPrompt: QueryClassificationPrompt,
     private readonly semanticPrompt: SemanticSynthesisPrompt,
     private readonly queryReformulationPrompt: QueryReformulationSynthesisPrompt,
     private readonly historySummarizationPrompt: HistorySummarizationSynthesisPrompt,
-    private readonly statisticalAnalysisPrompt: StatisticalAnalysisPrompt,
     private readonly groundingVerificationPrompt: GroundingVerificationPrompt,
     private readonly logStyleTransformationPrompt: LogStyleTransformationPrompt,
   ) {
     super();
   }
 
-  async extractMetadata(query: string): Promise<QueryMetadata> {
-    try {
-      this.logger.log(`Extracting metadata from query: "${query}"`);
-      const prompt = this.queryMetadataPrompt.build({ query });
-
-      const jsonModel = this.geminiClient.getJsonModel();
-      const result = await jsonModel.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-      this.logger.debug(`Extracted metadata: ${JSON.stringify(parsed)}`);
-      const { intent, intentConfidence } = parseIntentFromMetadata(parsed);
-      return {
-        startTime: parsed.startTime ? new Date(String(parsed.startTime)) : null,
-        endTime: parsed.endTime ? new Date(String(parsed.endTime)) : null,
-        service: (parsed.service as string) || null,
-        route: (parsed.route as string) || null,
-        errorCode: (parsed.errorCode as string) || null,
-        hasError: parsed.hasError === true || false,
-        intent,
-        intentConfidence,
-      };
-    } catch (error) {
-      this.logger.error(`Metadata extraction failed: ${error.message}`);
-      return {
-        startTime: null,
-        endTime: null,
-        service: null,
-        route: null,
-        errorCode: null,
-        hasError: false,
-      };
-    }
-  }
-
   /**
-   * Analyzes a natural language query for statistical intent and extracts parameters.
-   *
-   * @param query The natural language query
-   * @param initialMetadata Optional initial metadata extracted from the query (to avoid re-extraction)
-   * @returns The selected template ID and parameters
+   * Single LLM call that classifies query intent and extracts all metadata.
+   * templateId non-null → STATISTICAL; null → SEMANTIC.
    */
-  async analyzeStatisticalQuery(
+  async classifyAndExtract(
     query: string,
-    initialMetadata?: QueryMetadata,
-  ): Promise<{ templateId: string; params: Record<string, any> }> {
+    initialMetadata?: Partial<QueryMetadata>,
+  ): Promise<{ templateId: string | null; params: Record<string, any>; metadata: QueryMetadata }> {
+    const emptyMetadata: QueryMetadata = {
+      startTime: null,
+      endTime: null,
+      service: null,
+      route: null,
+      errorCode: null,
+      hasError: false,
+    };
+
     try {
-      this.logger.log(`Analyzing statistical intent for query: "${query}"`);
-      const prompt = this.statisticalAnalysisPrompt.build({
+      this.logger.log(`Classifying query and extracting metadata: "${query}"`);
+      const prompt = this.queryClassificationPrompt.build({
         query,
         initialMetadata,
       });
@@ -119,78 +64,65 @@ export class GeminiAdapter extends SynthesisPort {
       const text = response.text();
       const parsed = JSON.parse(text);
 
-      this.logger.debug(
-        `Statistical analysis result: ${JSON.stringify(parsed)}`,
+      this.logger.debug(`Classification result: ${JSON.stringify(parsed)}`);
+
+      const rawTemplateId =
+        typeof parsed.templateId === 'string' && parsed.templateId !== 'null'
+          ? parsed.templateId
+          : null;
+
+      const rawMeta = parsed.params?.metadata || {};
+
+      // Merge initial metadata as fallback for fields the LLM left null
+      if (initialMetadata) {
+        if (!rawMeta.startTime && initialMetadata.startTime) {
+          rawMeta.startTime =
+            (initialMetadata.startTime as Date).toISOString?.() ??
+            initialMetadata.startTime;
+        }
+        if (!rawMeta.endTime && initialMetadata.endTime) {
+          rawMeta.endTime =
+            (initialMetadata.endTime as Date).toISOString?.() ??
+            initialMetadata.endTime;
+        }
+        if (!rawMeta.service && initialMetadata.service) {
+          rawMeta.service = initialMetadata.service;
+        }
+        if (!rawMeta.route && initialMetadata.route) {
+          rawMeta.route = initialMetadata.route;
+        }
+        if (!rawMeta.errorCode && initialMetadata.errorCode) {
+          rawMeta.errorCode = initialMetadata.errorCode;
+        }
+        if (rawMeta.hasError === undefined && initialMetadata.hasError !== undefined) {
+          rawMeta.hasError = initialMetadata.hasError;
+        }
+      }
+
+      const metadata: QueryMetadata = normalizeMetadata({
+        startTime: rawMeta.startTime ? new Date(String(rawMeta.startTime)) : null,
+        endTime: rawMeta.endTime ? new Date(String(rawMeta.endTime)) : null,
+        service: (rawMeta.service as string) || null,
+        route: (rawMeta.route as string) || null,
+        errorCode: (rawMeta.errorCode as string) || null,
+        hasError: rawMeta.hasError === true || false,
+      });
+
+      this.logger.log(
+        `Classification: templateId=${rawTemplateId ?? 'null'} (${rawTemplateId ? 'STATISTICAL' : 'SEMANTIC'})`,
       );
 
-      let finalMetadata = parsed.params?.metadata || {};
-      if (initialMetadata) {
-        if (initialMetadata.startTime && !finalMetadata.startTime) {
-          finalMetadata.startTime = initialMetadata.startTime.toISOString();
-        }
-        if (initialMetadata.endTime && !finalMetadata.endTime) {
-          finalMetadata.endTime = initialMetadata.endTime.toISOString();
-        }
-        if (!finalMetadata.service && initialMetadata.service) {
-          finalMetadata.service = initialMetadata.service;
-        }
-        if (!finalMetadata.route && initialMetadata.route) {
-          finalMetadata.route = initialMetadata.route;
-        }
-        if (!finalMetadata.errorCode && initialMetadata.errorCode) {
-          finalMetadata.errorCode = initialMetadata.errorCode;
-        }
-        if (
-          finalMetadata.hasError === undefined &&
-          initialMetadata.hasError !== undefined
-        ) {
-          finalMetadata.hasError = initialMetadata.hasError;
-        }
-      }
-
-      if (finalMetadata.startTime) {
-        finalMetadata.startTime = new Date(finalMetadata.startTime);
-      }
-      if (finalMetadata.endTime) {
-        finalMetadata.endTime = new Date(finalMetadata.endTime);
-      }
-
       return {
-        templateId: parsed.templateId || 'TOP_ERROR_CODES',
-        params: {
-          ...parsed.params,
-          metadata: finalMetadata,
-        },
+        templateId: rawTemplateId,
+        params: { ...parsed.params, metadata },
+        metadata,
       };
     } catch (error) {
-      this.logger.error(`Statistical analysis failed: ${error.message}`);
-      const fallbackMetadata = initialMetadata
-        ? {
-            startTime: initialMetadata.startTime?.toISOString() || null,
-            endTime: initialMetadata.endTime?.toISOString() || null,
-            service: initialMetadata.service || null,
-            route: initialMetadata.route || null,
-            errorCode: initialMetadata.errorCode || null,
-            hasError:
-              initialMetadata.hasError !== undefined
-                ? initialMetadata.hasError
-                : true,
-          }
-        : {
-            startTime: null,
-            endTime: null,
-            service: null,
-            route: null,
-            errorCode: null,
-            hasError: true,
-          };
-
+      this.logger.error(`classifyAndExtract failed: ${error.message}. Falling back to SEMANTIC.`);
       return {
-        templateId: 'TOP_ERROR_CODES',
-        params: {
-          topN: 5,
-          metadata: fallbackMetadata,
-        },
+        templateId: null,
+        params: { topN: 10, metadata: emptyMetadata },
+        metadata: emptyMetadata,
       };
     }
   }

@@ -1,8 +1,6 @@
 import { Injectable, Logger, Inject } from "@nestjs/common";
 import {
   SearchUseCase,
-  INTENT_CLASSIFIER,
-  IntentClassifier,
   QueryStrategy,
   QueryContext,
   QUERY_STRATEGIES,
@@ -16,7 +14,6 @@ import {
   ContextCompressionService,
 } from "./preprocessing";
 import { KeywordIntentClassifier } from "./classifiers";
-import { normalizeMetadata } from "@embeddings/utils";
 
 /**
  * SearchService - Orchestrates query handling using Strategy Pattern.
@@ -37,8 +34,6 @@ export class SearchService extends SearchUseCase {
   constructor(
     @Inject(QUERY_STRATEGIES)
     private readonly strategies: QueryStrategy[],
-    @Inject(INTENT_CLASSIFIER)
-    private readonly intentClassifier: IntentClassifier,
     private readonly keywordIntentClassifier: KeywordIntentClassifier,
     private readonly synthesisPort: SynthesisPort,
     private readonly sessionCache: SessionCacheService,
@@ -101,14 +96,9 @@ export class SearchService extends SearchUseCase {
         clientId,
       );
 
-      const classification = await this.intentClassifier.classify(
-        query,
-        history,
-        context.metadata,
-      );
-      const strategy = this.resolveStrategy(classification.intent);
+      const strategy = this.resolveStrategy(context);
       this.logger.log(
-        `Selected strategy: ${strategy.intent} (classified=${classification.intent}, source=${classification.source}, confidence=${classification.confidence})`,
+        `Selected strategy: ${strategy.intent} (templateId=${context.templateId ?? 'null'})`,
       );
 
       return strategy.execute(context);
@@ -134,14 +124,12 @@ export class SearchService extends SearchUseCase {
     return this.sessionCache.deleteSession(sessionId, clientId);
   }
 
-  private resolveStrategy(intent: AnalysisIntent): QueryStrategy {
-    if (
-      intent === AnalysisIntent.SEQUENTIAL ||
-      intent === AnalysisIntent.UNKNOWN
-    ) {
-      return this.defaultStrategy;
+  private resolveStrategy(context: QueryContext): QueryStrategy {
+    if (context.templateId) {
+      const statistical = this.strategyByIntent.get(AnalysisIntent.STATISTICAL);
+      if (statistical) return statistical;
     }
-    return this.strategyByIntent.get(intent) ?? this.defaultStrategy;
+    return this.defaultStrategy;
   }
 
   /**
@@ -239,29 +227,25 @@ export class SearchService extends SearchUseCase {
         ? await this.contextCompression.compressHistory(history)
         : history;
 
-    // 6. Extract metadata from reformulated query
-    const metadata = await this.synthesisPort.extractMetadata(
-      safeReformulatedQuery,
-    );
-
-    const normalizedMetadata = normalizeMetadata(metadata);
+    // 6. Classify intent and extract metadata in one LLM call
+    const { templateId, params: templateParams, metadata } =
+      await this.synthesisPort.classifyAndExtract(safeReformulatedQuery);
 
     this.logger.log(
-      `Extracted metadata from reformulated query: ${JSON.stringify(metadata)}`,
-    );
-    this.logger.log(
-      `Normalized metadata: ${JSON.stringify(normalizedMetadata)}`,
+      `classifyAndExtract: templateId=${templateId ?? 'null'}, metadata=${JSON.stringify(metadata)}`,
     );
 
     return {
       originalQuery: query,
       reformulatedQuery: safeReformulatedQuery,
       isStandalone,
-      metadata: normalizedMetadata,
+      metadata,
       history: compressedHistory,
       sessionId,
       clientId,
       targetLanguage: originalLanguage,
+      templateId: templateId ?? null,
+      templateParams: templateId ? templateParams : undefined,
     };
   }
 

@@ -17,6 +17,8 @@
 - 전통적인 텍스트 기반 로깅의 한계를 극복하기 위해, 하나의 요청을 하나의 '와이드 이벤트(Wide Event)'로 취급하고 \
   이를 RAG(Retrieval-Augmented Generation) 파이프라인과 결합하여 점진적으로 발전시키는 과정을 담고 있습니다.
 
+저장소에는 Phase 4~5 검색 API와 연동하는 **LogLens** 웹 클라이언트(React / Vite)가 포함되어 있습니다. 세션 단위 대화, 자연어 질의, 그리고 집계 로그에 기반한 **실시간 통계 패널**(에러율·지연 백분위수·시간대별 요청량·반창 에러 추세 등)을 제공합니다. 아래 **클라이언트 UI (LogLens)** 를 참고하세요.
+
 ---
 
 ## 📖 문서 안내
@@ -29,19 +31,36 @@
 
 ## 🏗️ 프로젝트 구조
 
-```bash
+```text
 .
-├── backend/            # NestJS 서버 소스 코드
-│   ├── src/            # 비즈니스 로직 (Payments, Embeddings 등)
-│   ├── libs/config/    # 초기화 관련 라이브러리
-│   └── libs/logging/   # 핵심 로깅 라이브러리 (Phase 1~5 공통)
-├── prompts/            # LLM 응답에 사용되는 프롬프트들
-├── docker/             # 인프라 구성을 위한 Docker Compose 파일
-├── docs/               # Phase별 상세 설계 문서 (업데이트 중)
-├── journals/           # Phase별 회고 문서
-├── test_data/          # 테스트 데이터 생성 및 mock 서비스 로직 테스트 요청을 위한 유틸
-└── Overview-ko.md      # 프로젝트 철학 및 상세 배경
+├── backend/                 # NestJS API (Payments, Embeddings / 검색 등)
+│   ├── src/
+│   ├── libs/config/
+│   ├── libs/logging/        # 와이드 이벤트 로깅 (Phase 1~5 공통)
+│   └── prompts/             # LLM 프롬프트 (분류, 합성, 근거 검증 등)
+├── frontend/                # LogLens UI — React, Vite, FSD
+├── docker/                  # Docker Compose (MongoDB, Kafka, Redis 등)
+├── docs/                    # 설계 메모·스크린샷
+├── journals/                # Phase 회고
+├── notes/                   # 짧은 결정 로그·태스크 노트
+├── test_data/               # 부하 테스트·목 트래픽 유틸
+├── OVERVIEW.md              # 동기·배경 (영문)
+└── OVERVIEW-ko.md           # 동일 (한국어)
 ```
+
+---
+
+## 🖥️ 클라이언트 UI (LogLens)
+
+![LogLens — 세션 채팅과 실시간 통계](./docs/images/client-interface.png)
+
+**LogLens RAG** 인터페이스([`frontend/`](./frontend/))는 다음을 제공합니다.
+
+- **세션**: 세션 검색·선택, 새 분석 스레드 시작.
+- **자연어 질의**: 에러율·지연·실패 등 질문; **좁은 시간 범위**(명시적 시작·종료 시각 포함)는 쿼리 분류 단계에서 메타데이터로 전달되어 통계가 요청 구간과 일치하도록 동작합니다.
+- **Live updates**(우측 패널): 요약 카드(총 요청 수, 에러율, 평균·P99 지연, 성공률), **에러 추세**(구간 전반 vs 후반), **지연 백분위수**(P50 / P95 / P99), **요청량** 시계열(시간대별 요청·오류).
+
+짧은 구간(수 분 단위) 질의에서는 백엔드가 **더 잘게 쪼인 시간 버킷**을 선택해, 해당 구간에 데이터가 퍼져 있으면 차트에 여러 포인트가 나타나도록 합니다.
 
 ---
 
@@ -56,15 +75,16 @@
 ### 2. 설치 및 환경 설정
 
 ```bash
-# 프로젝트 디렉토리로 이동
-cd context-aware-logging/backend
-
-# 의존성 설치
+# 백엔드(API) — 프로젝트 루트에서
+cd backend
 pnpm install
 
-# 환경 변수 설정 (.env 파일 생성 및 API 키 입력)
-# backend/.env.example 파일을 참고하여 .env 파일을 작성해주세요.
-# Phase 3 부터 Gemini API Key, Voyage AI API Key 등이 필요합니다.
+# 환경 변수: backend/.env.example 을 참고해 .env 를 만듭니다.
+# Phase 3부터 Gemini, Voyage AI 키가 필요합니다.
+
+# 프론트엔드(LogLens UI) — 선택; API 베이스 URL은 frontend 설정·환경 변수 참고
+cd ../frontend
+pnpm install
 ```
 
 ### 3. 인프라 실행 (Docker)
@@ -72,6 +92,18 @@ pnpm install
 ```bash
 cd docker
 docker-compose up -d
+```
+
+### 4. 애플리케이션 실행 (개발)
+
+```bash
+# 터미널 1 — API (기본 http://localhost:3000)
+cd backend
+pnpm run start:dev
+
+# 터미널 2 — LogLens UI (개발 서버 URL은 frontend/README.md 참고)
+cd frontend
+pnpm run dev
 ```
 
 ---
@@ -227,14 +259,14 @@ docker-compose up -d
         --data-urlencode "sessionId=test-session"
     ```
 
-  - 통계 검색 (업데이트 중)
+  - 통계·집계 질의 (에러율, 빈도 등 — LogLens 우측 패널에 차트·요약 반영)
     ```bash
         curl -G "http://localhost:3000/search/ask" \
         --data-urlencode "q=최근 24 시간동안 발생한 결제 요청 에러의 빈도를 알려줘" \
         --data-urlencode "sessionId=test-session"
     ```
 
-- **결과 확인**: AI가 실제 로그 데이터 / 캐시에 저장된 세션의 대화내역을 근거로 분석한 답변을 반환합니다.
+- **결과 확인**: AI가 실제 로그 데이터 / 캐시에 저장된 세션의 대화내역을 근거로 분석한 답변을 반환합니다. **LogLens** UI를 띄우면 동일한 흐름을 브라우저에서 실행하고, 통계 응답에 대한 차트·요약 카드를 함께 확인할 수 있습니다.
 
 ### Phase 5: 운영 안정화 (Hardening)
 

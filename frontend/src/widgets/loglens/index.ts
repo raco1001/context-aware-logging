@@ -8,4 +8,6 @@ export {
   RouteMetricsChartWidget,
 } from './ui/LogChartsWidget'
 export { RouteTableWidget } from './ui/RouteTableWidget'
+export { BreakdownWidget } from './ui/BreakdownWidget'
+export { PercentilesWidget } from './ui/PercentilesWidget'
 

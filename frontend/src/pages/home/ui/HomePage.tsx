@@ -11,9 +11,12 @@ import {
 import { INITIAL_MESSAGES } from "@/shared/lib/loglens"
 import type {
   AnalysisResult,
+  BreakdownRow,
   ChatMessage,
   ChatSession,
+  ErrorTrendHalfWindow,
   LogStats,
+  PercentileRow,
   RouteMetric,
   SessionSummary,
   StatusDistribution,
@@ -27,8 +30,10 @@ import {
   searchLogs,
 } from "@/shared/api/logSearch"
 import {
+  BreakdownWidget,
   ChatPanelWidget,
   LatencyChartWidget,
+  PercentilesWidget,
   RequestVolumeChartWidget,
   RouteMetricsChartWidget,
   RouteTableWidget,
@@ -71,6 +76,15 @@ export function HomePage() {
   const [analyticsRoutes, setAnalyticsRoutes] = useState<RouteMetric[]>([])
   const [analyticsStatusDistribution, setAnalyticsStatusDistribution] =
     useState<StatusDistribution[] | null>(null)
+  const [analyticsBreakdown, setAnalyticsBreakdown] = useState<
+    BreakdownRow[] | null
+  >(null)
+  const [analyticsPercentiles, setAnalyticsPercentiles] = useState<
+    PercentileRow[] | null
+  >(null)
+  const [analyticsHalfWindow, setAnalyticsHalfWindow] = useState<
+    ErrorTrendHalfWindow | null
+  >(null)
   const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false)
   const [showOverviewCard, setShowOverviewCard] = useState(false)
   const [showRoutesPanel, setShowRoutesPanel] = useState(false)
@@ -248,8 +262,14 @@ export function HomePage() {
           const normalizedViewType = result.viewType ?? "chat"
           const hasSources = Array.isArray(result.sources) && result.sources.length > 0
           const hasAnswer = Boolean(result.answer && result.answer.trim())
+          /** SEMANTIC-only: STATISTICAL answers use aggregation as evidence, not source chunks. */
           const noSourceGuidance =
-            hasAnswer && !hasSources ? "\n\n관련 로그를 찾지 못했습니다. 조건을 완화해서 다시 시도해 주세요." : ""
+            hasAnswer &&
+            !hasSources &&
+            normalizedIntent !== "STATISTICAL" &&
+            !result.statsPayload
+              ? "\n\n관련 로그를 찾지 못했습니다. 조건을 완화해서 다시 시도해 주세요."
+              : ""
           const fallbackAnswer =
             normalizedIntent === "UNKNOWN"
               ? "분석 의도를 파악하지 못했습니다. 에러 코드, 서비스, 시간 범위를 포함해 다시 질문해 주세요."
@@ -278,23 +298,24 @@ export function HomePage() {
               setShowOverviewCard(false)
               setShowRoutesPanel(false)
               setAnalyticsStatusDistribution(null)
+              setAnalyticsBreakdown(null)
+              setAnalyticsPercentiles(null)
+              setAnalyticsHalfWindow(null)
             }
 
             if (analyticsAvailable && result.statsPayload) {
               if (result.statsPayload.overview) {
-                setAnalyticsOverview((prev) => ({
-                  ...(prev || {}),
-                  ...(result.statsPayload!.overview as Partial<LogStats>),
-                }) as LogStats)
+                setAnalyticsOverview(
+                  result.statsPayload.overview as LogStats,
+                )
                 setShowOverviewCard(true)
               } else {
                 setShowOverviewCard(false)
               }
-              if (result.statsPayload.timeseries) {
-                setAnalyticsTimeseries(
-                  (result.statsPayload.timeseries as TimeSeriesPoint[]) || [],
-                )
-              }
+              const ts = result.statsPayload.timeseries
+              setAnalyticsTimeseries(
+                Array.isArray(ts) ? (ts as TimeSeriesPoint[]) : [],
+              )
               if (result.statsPayload.routes) {
                 setAnalyticsRoutes(
                   (result.statsPayload.routes as RouteMetric[]) || [],
@@ -308,6 +329,28 @@ export function HomePage() {
                 setAnalyticsStatusDistribution(dist)
               } else {
                 setAnalyticsStatusDistribution(null)
+              }
+              const bd = result.statsPayload.breakdown
+              if (Array.isArray(bd) && bd.length > 0) {
+                setAnalyticsBreakdown(bd as BreakdownRow[])
+              } else {
+                setAnalyticsBreakdown(null)
+              }
+              const pct = result.statsPayload.percentiles
+              if (Array.isArray(pct) && pct.length > 0) {
+                setAnalyticsPercentiles(pct as PercentileRow[])
+              } else {
+                setAnalyticsPercentiles(null)
+              }
+              const hw = result.statsPayload.halfWindow
+              if (
+                hw &&
+                typeof hw.firstErrorRatePct === "number" &&
+                typeof hw.secondErrorRatePct === "number"
+              ) {
+                setAnalyticsHalfWindow(hw)
+              } else {
+                setAnalyticsHalfWindow(null)
               }
             }
           }
@@ -550,17 +593,49 @@ export function HomePage() {
                       </div>
                       {showOverviewCard ? (
                         analyticsOverview ? (
-                          <StatsOverviewWidget stats={analyticsOverview} />
+                          <StatsOverviewWidget
+                            stats={analyticsOverview}
+                            percentiles={
+                              analyticsPercentiles ?? undefined
+                            }
+                            timeseries={
+                              analyticsTimeseries.length > 0
+                                ? analyticsTimeseries
+                                : undefined
+                            }
+                            halfWindow={
+                              analyticsHalfWindow ?? undefined
+                            }
+                          />
                         ) : (
                           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
                             No stats available
                           </div>
                         )
                       ) : null}
-                      <div className="grid gap-4">
-                        <RequestVolumeChartWidget data={analyticsTimeseries} />
-                        <LatencyChartWidget data={analyticsTimeseries} />
-                      </div>
+                      {analyticsBreakdown && analyticsBreakdown.length > 0 ? (
+                        <BreakdownWidget
+                          title="Breakdown"
+                          rows={analyticsBreakdown}
+                        />
+                      ) : null}
+                      {analyticsPercentiles &&
+                      analyticsPercentiles.length > 0 ? (
+                        <PercentilesWidget rows={analyticsPercentiles} />
+                      ) : null}
+                      {analyticsTimeseries.length > 0 ? (
+                        <div className="grid gap-4">
+                          <RequestVolumeChartWidget
+                            data={analyticsTimeseries}
+                          />
+                          {analyticsTimeseries.some(
+                            (p) =>
+                              typeof p.averageDurationMs === "number",
+                          ) ? (
+                            <LatencyChartWidget data={analyticsTimeseries} />
+                          ) : null}
+                        </div>
+                      ) : null}
                       {showRoutesPanel && (
                         <div className="grid gap-4">
                           {analyticsStatusDistribution &&

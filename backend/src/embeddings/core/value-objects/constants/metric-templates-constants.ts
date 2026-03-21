@@ -156,36 +156,175 @@ export const METRIC_TEMPLATES: Record<string, IMetricTemplate> = {
       // Strip hasError/errorCode from match so the denominator includes ALL
       // requests in the time window. errorCount is derived inside $group.
       const { hasError: _h, errorCode: _e, ...baseMetadata } = params.metadata;
-      return [
-      {
-        $match: AggregationHelper.buildMatchStage(baseMetadata),
-      },
-      {
-        $group: {
-          _id: null,
-          totalCount: { $sum: 1 },
-          errorCount: {
-            $sum: { $cond: [{ $ifNull: ['$error.code', false] }, 1, 0] },
-          },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          totalCount: 1,
-          errorCount: 1,
-          errorRate: {
-            $cond: [
-              { $gt: ['$totalCount', 0] },
+      const matchStage = AggregationHelper.buildMatchStage(baseMetadata);
+      const start = baseMetadata.startTime;
+      const end = baseMetadata.endTime;
+      const mid =
+        start && end
+          ? new Date((start.getTime() + end.getTime()) / 2)
+          : null;
+
+      const seriesBucket = AggregationHelper.resolveSeriesTimeBucket(
+        baseMetadata.startTime,
+        baseMetadata.endTime,
+      );
+
+      const trendHalvesPipeline =
+        start && end && mid
+          ? [
               {
-                $multiply: [{ $divide: ['$errorCount', '$totalCount'] }, 100],
+                $group: {
+                  _id: {
+                    $cond: [{ $lt: ['$timestamp', mid] }, 'first', 'second'],
+                  },
+                  totalCount: { $sum: 1 },
+                  errorCount: {
+                    $sum: {
+                      $cond: [{ $ifNull: ['$error.code', false] }, 1, 0],
+                    },
+                  },
+                },
               },
-              0,
+              {
+                $project: {
+                  _id: 1,
+                  totalCount: 1,
+                  errorCount: 1,
+                  errorRatePct: {
+                    $cond: [
+                      { $gt: ['$totalCount', 0] },
+                      {
+                        $multiply: [
+                          { $divide: ['$errorCount', '$totalCount'] },
+                          100,
+                        ],
+                      },
+                      0,
+                    ],
+                  },
+                },
+              },
+            ]
+          : [{ $match: { $expr: { $eq: [1, 0] } } }];
+
+      return [
+        { $match: matchStage },
+        {
+          $facet: {
+            summary: [
+              {
+                $group: {
+                  _id: null,
+                  totalCount: { $sum: 1 },
+                  errorCount: {
+                    $sum: {
+                      $cond: [{ $ifNull: ['$error.code', false] }, 1, 0],
+                    },
+                  },
+                },
+              },
+              {
+                $project: {
+                  _id: 0,
+                  totalCount: 1,
+                  errorCount: 1,
+                  errorRate: {
+                    $cond: [
+                      { $gt: ['$totalCount', 0] },
+                      {
+                        $multiply: [
+                          { $divide: ['$errorCount', '$totalCount'] },
+                          100,
+                        ],
+                      },
+                      0,
+                    ],
+                  },
+                },
+              },
             ],
+            series: [
+              {
+                $group: {
+                  _id: {
+                    $dateTrunc: {
+                      date: '$timestamp',
+                      unit: seriesBucket.unit,
+                      timezone: 'UTC',
+                      ...(seriesBucket.binSize != null && seriesBucket.binSize > 1
+                        ? { binSize: seriesBucket.binSize }
+                        : {}),
+                    },
+                  },
+                  total: { $sum: 1 },
+                  failed: {
+                    $sum: {
+                      $cond: [{ $ifNull: ['$error.code', false] }, 1, 0],
+                    },
+                  },
+                },
+              },
+              { $sort: { _id: 1 } },
+              {
+                $project: {
+                  _id: 0,
+                  bucket: {
+                    $dateToString: {
+                      format: seriesBucket.dateToStringFormat,
+                      date: '$_id',
+                      timezone: 'UTC',
+                    },
+                  },
+                  total: 1,
+                  failed: 1,
+                },
+              },
+            ],
+            latency: [
+              {
+                $match: {
+                  'performance.durationMs': { $exists: true, $ne: null },
+                },
+              },
+              { $sort: { 'performance.durationMs': 1 } },
+              {
+                $group: {
+                  _id: null,
+                  durations: { $push: '$performance.durationMs' },
+                  count: { $sum: 1 },
+                },
+              },
+              {
+                $project: {
+                  _id: 0,
+                  count: 1,
+                  p50: {
+                    $arrayElemAt: [
+                      '$durations',
+                      { $floor: { $multiply: [0.5, '$count'] } },
+                    ],
+                  },
+                  p95: {
+                    $arrayElemAt: [
+                      '$durations',
+                      { $floor: { $multiply: [0.95, '$count'] } },
+                    ],
+                  },
+                  p99: {
+                    $arrayElemAt: [
+                      '$durations',
+                      { $floor: { $multiply: [0.99, '$count'] } },
+                    ],
+                  },
+                  avg: { $avg: '$durations' },
+                  max: { $max: '$durations' },
+                },
+              },
+            ],
+            trendHalves: trendHalvesPipeline,
           },
         },
-      },
-    ];
+      ];
     },
   },
 };
