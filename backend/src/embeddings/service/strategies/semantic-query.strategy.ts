@@ -51,6 +51,7 @@ export class SemanticQueryStrategy implements QueryStrategy {
       metadata,
       history,
       sessionId,
+      clientId,
       targetLanguage,
     } = context;
 
@@ -225,7 +226,7 @@ export class SemanticQueryStrategy implements QueryStrategy {
           };
 
           if (sessionId) {
-            await this.sessionCache.updateSession(sessionId, result);
+            await this.sessionCache.updateSession(sessionId, result, clientId);
           }
 
           return result;
@@ -265,7 +266,7 @@ export class SemanticQueryStrategy implements QueryStrategy {
     };
 
     if (sessionId) {
-      await this.sessionCache.updateSession(sessionId, result);
+      await this.sessionCache.updateSession(sessionId, result, clientId);
     }
 
     return result;

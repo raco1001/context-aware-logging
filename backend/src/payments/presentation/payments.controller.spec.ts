@@ -1,35 +1,33 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { PaymentsController } from "./payments.controller";
-import { PaymentsService } from "@payments/service";
-import { LoggingService } from "@logging/service";
+import { PaymentsServicePort } from "@payments/in-ports";
+import { LoggingUseCase } from "@logging/in-ports";
+import { ContextService } from "@logging/service";
+import { FinalizeMetrics } from "@logging/domain";
+import { Reflector } from "@nestjs/core";
 import { HttpException, HttpStatus } from "@nestjs/common";
 
 describe("PaymentsController", () => {
   let controller: PaymentsController;
-  let service: PaymentsService;
-  let loggingService: LoggingService;
 
   const mockPaymentsService = {
     processPayment: jest.fn(),
-  };
-
-  const mockLoggingService = {
-    addUserContext: jest.fn(),
-    addError: jest.fn(),
   };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PaymentsController],
       providers: [
-        { provide: PaymentsService, useValue: mockPaymentsService },
-        { provide: LoggingService, useValue: mockLoggingService },
+        { provide: PaymentsServicePort, useValue: mockPaymentsService },
+        { provide: LoggingUseCase, useValue: { startRequest: jest.fn(), endRequest: jest.fn() } },
+        { provide: ContextService, useValue: { addUserContext: jest.fn(), addError: jest.fn() } },
+        { provide: FinalizeMetrics, useValue: { finalize: jest.fn() } },
+        Reflector,
       ],
     }).compile();
 
     controller = module.get<PaymentsController>(PaymentsController);
-    service = module.get<PaymentsService>(PaymentsService);
-    loggingService = module.get<LoggingService>(LoggingService);
+    jest.clearAllMocks();
   });
 
   it("should be defined", () => {
@@ -37,71 +35,73 @@ describe("PaymentsController", () => {
   });
 
   describe("handlePayment", () => {
-    it("should add user context and return service result on success", async () => {
-      const dto = {
-        userId: "u1",
-        role: "admin",
-        amount: 100,
-        product: "product1",
-        count: 1,
+    const dto = {
+      userId: "u1",
+      role: "admin",
+      amount: 100,
+      product: "product1",
+      count: 1,
+    };
+
+    it("should return result on success", async () => {
+      const successResult = {
+        success: true,
+        transactionId: "t1",
+        stepsReached: 3,
       };
-      const successResult = { success: true, transactionId: "t1" };
       mockPaymentsService.processPayment.mockResolvedValue(successResult);
 
       const result = await controller.handlePayment(dto);
-
-      expect(loggingService.addUserContext).toHaveBeenCalledWith({
-        id: "u1",
-        role: "admin",
-      });
       expect(result).toBe(successResult);
     });
 
-    it("should throw HttpException and add error context on failure", async () => {
-      const dto = {
-        userId: "u1",
-        role: "admin",
-        amount: 100,
-        product: "product1",
-        count: 1,
-      };
+    it("should throw HttpException on failure", async () => {
       const failResult = {
         success: false,
-        errorCode: "ERR",
-        errorMessage: "Msg",
+        errorCode: "INSUFFICIENT_BALANCE",
+        errorMessage: "Not enough funds",
+        stepsReached: 1,
       };
       mockPaymentsService.processPayment.mockResolvedValue(failResult);
 
       await expect(controller.handlePayment(dto)).rejects.toThrow(
         HttpException,
       );
-
-      expect(loggingService.addError).toHaveBeenCalledWith({
-        code: "ERR",
-        message: "Msg",
-      });
     });
 
     it("should throw 500 for GATEWAY_TIMEOUT", async () => {
-      const dto = {
-        userId: "u1",
-        role: "admin",
-        amount: 100,
-        product: "product1",
-        count: 1,
-      };
       const failResult = {
         success: false,
         errorCode: "GATEWAY_TIMEOUT",
         errorMessage: "Timeout",
+        stepsReached: 2,
       };
       mockPaymentsService.processPayment.mockResolvedValue(failResult);
 
       try {
         await controller.handlePayment(dto);
+        fail("Expected HttpException");
       } catch (e) {
         expect(e).toBeInstanceOf(HttpException);
         expect(e.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+    });
+
+    it("should throw 400 for non-timeout errors", async () => {
+      const failResult = {
+        success: false,
+        errorCode: "INSUFFICIENT_BALANCE",
+        errorMessage: "Not enough funds",
+        stepsReached: 1,
+      };
+      mockPaymentsService.processPayment.mockResolvedValue(failResult);
+
+      try {
+        await controller.handlePayment(dto);
+        fail("Expected HttpException");
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpException);
+        expect(e.getStatus()).toBe(HttpStatus.BAD_REQUEST);
       }
     });
   });

@@ -92,7 +92,15 @@
       "^@embeddings/utils$": "<rootDir>/src/embeddings/core/utils/index",
       "^@embeddings/core/(.*)$": "<rootDir>/src/embeddings/core/$1",
       "^@embeddings/infra/(.*)$": "<rootDir>/src/embeddings/infrastructure/$1",
-      "^@embeddings/services/(.*)$": "<rootDir>/src/embeddings/services/$1"
+      "^@embeddings/services/(.*)$": "<rootDir>/src/embeddings/services/$1",
+      "^@payments/in-ports$": "<rootDir>/src/payments/core/ports/in/index",
+      "^@payments/out-ports$": "<rootDir>/src/payments/core/ports/out/index",
+      "^@payments/dtos$": "<rootDir>/src/payments/core/dtos/index",
+      "^@payments/service$": "<rootDir>/src/payments/service/index",
+      "^@payments/infrastructure$": "<rootDir>/src/payments/infrastructure/index",
+      "^@payments/value-objects$": "<rootDir>/src/payments/core/value-objects/index",
+      "^@payments/presentation$": "<rootDir>/src/payments/presentation/index",
+      "^@contracts$": "<rootDir>/libs/contracts/index"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

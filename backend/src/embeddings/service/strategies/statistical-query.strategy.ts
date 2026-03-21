@@ -52,6 +52,7 @@ export class StatisticalQueryStrategy implements QueryStrategy {
       metadata,
       history,
       sessionId,
+      clientId,
       targetLanguage,
     } = context;
 
@@ -129,7 +130,7 @@ export class StatisticalQueryStrategy implements QueryStrategy {
       };
 
       if (sessionId) {
-        await this.sessionCache.updateSession(sessionId, result);
+        await this.sessionCache.updateSession(sessionId, result, clientId);
       }
 
       return result;

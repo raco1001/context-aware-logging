@@ -8,7 +8,7 @@ import {
   QUERY_STRATEGIES,
 } from "@embeddings/in-ports";
 import { SynthesisPort } from "@embeddings/out-ports";
-import { AnalysisResult } from "@embeddings/dtos";
+import { AnalysisResult, SessionSummary } from "@embeddings/dtos";
 import { AnalysisIntent } from "@embeddings/value-objects/filter";
 import { SessionCacheService } from "../infrastructure/cache/session-cache.service";
 import {
@@ -66,7 +66,11 @@ export class SearchService extends SearchUseCase {
    * @param sessionId The session ID for chat history.
    * @returns The analysis result containing the answer, confidence, and source.
    */
-  async ask(query: string, sessionId?: string): Promise<AnalysisResult> {
+  async ask(
+    query: string,
+    sessionId?: string,
+    clientId?: string,
+  ): Promise<AnalysisResult> {
     this.logger.log(
       `Processing RAG query: "${query}" (Session: ${sessionId || "none"})`,
     );
@@ -85,11 +89,17 @@ export class SearchService extends SearchUseCase {
           query,
           history,
           sessionId,
+          clientId,
         );
         return strategy.execute(context);
       }
 
-      const context = await this.buildQueryContext(query, history, sessionId);
+      const context = await this.buildQueryContext(
+        query,
+        history,
+        sessionId,
+        clientId,
+      );
 
       const classification = await this.intentClassifier.classify(
         query,
@@ -114,6 +124,14 @@ export class SearchService extends SearchUseCase {
    */
   async getChatHistory(sessionId: string): Promise<AnalysisResult[]> {
     return this.sessionCache.getHistory(sessionId);
+  }
+
+  async listSessions(clientId: string): Promise<SessionSummary[]> {
+    return this.sessionCache.listSessions(clientId);
+  }
+
+  async deleteSession(sessionId: string, clientId: string): Promise<boolean> {
+    return this.sessionCache.deleteSession(sessionId, clientId);
   }
 
   private resolveStrategy(intent: AnalysisIntent): QueryStrategy {
@@ -149,6 +167,7 @@ export class SearchService extends SearchUseCase {
     query: string,
     history: AnalysisResult[],
     sessionId?: string,
+    clientId?: string,
   ): QueryContext {
     const targetLanguage = this.synthesisPort.detectLanguage(query);
 
@@ -166,6 +185,7 @@ export class SearchService extends SearchUseCase {
       },
       history,
       sessionId,
+      clientId,
       targetLanguage,
     };
   }
@@ -178,6 +198,7 @@ export class SearchService extends SearchUseCase {
     query: string,
     history: AnalysisResult[],
     sessionId?: string,
+    clientId?: string,
   ): Promise<QueryContext> {
     // 1. Detect original language
     const originalLanguage = this.synthesisPort.detectLanguage(query);
@@ -239,6 +260,7 @@ export class SearchService extends SearchUseCase {
       metadata: normalizedMetadata,
       history: compressedHistory,
       sessionId,
+      clientId,
       targetLanguage: originalLanguage,
     };
   }

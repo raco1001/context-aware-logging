@@ -11,7 +11,7 @@ import { catchError, finalize, tap } from 'rxjs/operators';
 import { Request } from 'express';
 import { randomUUID } from 'crypto';
 import { LoggingUseCase } from '@logging/in-ports';
-import { ContextService } from 'libs/logging/service';
+import { ContextService } from '@logging/service';
 import { FinalizeMetrics } from '@logging/domain';
 import { RouteNormalizer, ErrorNormalizer } from './normalizers';
 

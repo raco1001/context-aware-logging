@@ -49,8 +49,20 @@ export interface StatsPayload {
   raw?: unknown;
 }
 
+export interface SessionSummary {
+  sessionId: string;
+  clientId?: string;
+  title: string;
+  lastMessage: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AnalysisResult {
   sessionId?: string;
+  clientId?: string;
+  title?: string;
   question: string;
   intent: AnalysisIntent;
   answer: string;

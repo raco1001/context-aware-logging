@@ -24,6 +24,9 @@ export interface QueryContext {
   /** Session ID for cache management */
   readonly sessionId?: string;
 
+  /** Optional X-Client-Id for persistence */
+  readonly clientId?: string;
+
   /** Detected language of the original query */
   readonly targetLanguage: 'Korean' | 'English';
 }

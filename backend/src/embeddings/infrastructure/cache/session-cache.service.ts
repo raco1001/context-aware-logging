@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatHistoryPort, SessionCachePort } from '@embeddings/out-ports';
-import { SessionCacheDto, AnalysisResult } from '@embeddings/dtos';
+import { SessionCacheDto, AnalysisResult, SessionSummary } from '@embeddings/dtos';
 
 /**
  * SessionCacheService - Manages active session history with TTL.
@@ -68,12 +68,20 @@ export class SessionCacheService {
   async updateSession(
     sessionId: string,
     result: AnalysisResult,
+    clientId?: string,
   ): Promise<void> {
-    await this.chatHistoryPort.save(result);
+    const base = clientId ? { ...result, clientId } : { ...result };
+    const isFirst = await this.isFirstMessageInSession(sessionId);
+    const toSave =
+      isFirst && result.question
+        ? { ...base, title: this.truncateText(result.question, 50) }
+        : base;
+
+    await this.chatHistoryPort.save(toSave);
 
     const cached = await this.sessionCachePort.get(sessionId);
     if (cached) {
-      cached.history.push(result);
+      cached.history.push(toSave);
       cached.lastAccessed = new Date();
       await this.sessionCachePort.set(sessionId, cached);
       this.logger.debug(
@@ -81,12 +89,36 @@ export class SessionCacheService {
       );
     } else {
       await this.sessionCachePort.set(sessionId, {
-        history: [result],
+        history: [toSave],
         lastAccessed: new Date(),
         ttl: this.defaultTtl,
       });
       this.logger.debug(`Created new cache entry for session ${sessionId}`);
     }
+  }
+
+  /**
+   * Lists sessions for a client (delegates to persistent store).
+   */
+  async listSessions(clientId: string): Promise<SessionSummary[]> {
+    if (!clientId) {
+      return [];
+    }
+    return this.chatHistoryPort.listSessions(clientId);
+  }
+
+  /**
+   * Deletes persisted history for a client-owned session and evicts cache.
+   */
+  async deleteSession(sessionId: string, clientId: string): Promise<boolean> {
+    if (!sessionId || !clientId) {
+      return false;
+    }
+    const removed = await this.chatHistoryPort.deleteSession(sessionId, clientId);
+    if (removed) {
+      await this.invalidateSession(sessionId);
+    }
+    return removed;
   }
 
   /**
@@ -99,6 +131,22 @@ export class SessionCacheService {
     if (deleted) {
       this.logger.debug(`Invalidated cache for session ${sessionId}`);
     }
+  }
+
+  private async isFirstMessageInSession(sessionId: string): Promise<boolean> {
+    const cached = await this.sessionCachePort.get(sessionId);
+    if (cached && cached.history.length > 0) {
+      return false;
+    }
+    const fromDb = await this.chatHistoryPort.findBySessionId(sessionId);
+    return fromDb.length === 0;
+  }
+
+  private truncateText(text: string, maxChars: number): string {
+    if (text.length <= maxChars) {
+      return text;
+    }
+    return text.slice(0, maxChars);
   }
 
   /**
