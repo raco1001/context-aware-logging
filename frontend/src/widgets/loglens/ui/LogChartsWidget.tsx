@@ -33,6 +33,20 @@ export function RequestVolumeChartWidget({ data }: RequestVolumeChartProps) {
     []
   )
 
+  if (data.length === 0) {
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Request Volume</h3>
+          <p className="text-xs text-muted-foreground">Requests & errors over 24h</p>
+        </div>
+        <div className="flex h-[200px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
+          No data
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
@@ -104,6 +118,20 @@ export function LatencyChartWidget({ data }: LatencyChartProps) {
     []
   )
 
+  if (data.length === 0) {
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Latency Trend</h3>
+          <p className="text-xs text-muted-foreground">Average response time (ms)</p>
+        </div>
+        <div className="flex h-[200px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
+          No data
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
@@ -151,6 +179,10 @@ interface StatusPieChartProps {
 }
 
 export function StatusPieChartWidget({ data }: StatusPieChartProps) {
+  if (data.length === 0) {
+    return null
+  }
+
   const total = data.reduce((sum, d) => sum + d.count, 0)
   const chartConfig = useMemo(
     () => ({
@@ -219,6 +251,20 @@ export function RouteMetricsChartWidget({ data }: RouteMetricsChartProps) {
     }),
     []
   )
+
+  if (data.length === 0) {
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Route Metrics</h3>
+          <p className="text-xs text-muted-foreground">Traffic by endpoint</p>
+        </div>
+        <div className="flex h-[200px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
+          No data
+        </div>
+      </div>
+    )
+  }
 
   const chartData = data.map((d) => ({
     route: d.route.split(" ")[1] || d.route,

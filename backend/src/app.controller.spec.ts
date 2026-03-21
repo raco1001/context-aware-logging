@@ -16,7 +16,7 @@ describe('AppController', () => {
 
   describe('root', () => {
     it('should return health check passed', () => {
-      expect(appController.getHealth()).toBe({
+      expect(appController.getHealth()).toStrictEqual({
         status: 'ok',
         message: 'Health check passed',
       });

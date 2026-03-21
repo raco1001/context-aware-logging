@@ -8,7 +8,7 @@
  */
 
 import { MongoClient } from "mongodb";
-import { AnalysisResult } from "./src/embeddings/core/dtos/analysis-result";
+import { AnalysisResult, SessionSummary } from "./src/embeddings/core/dtos/analysis-result";
 import { AnalysisIntent } from "./src/embeddings/core/value-objects/filter";
 // Mock ChatHistoryPort for testing
 class MockChatHistoryPort {
@@ -29,6 +29,57 @@ class MockChatHistoryPort {
       `[DB] Retrieved ${history.length} messages for session ${sessionId}`,
     );
     return [...history]; // Return copy
+  }
+
+  async listSessions(clientId?: string): Promise<SessionSummary[]> {
+    const grouped = new Map<string, AnalysisResult[]>();
+    for (const [, results] of this.storage) {
+      for (const r of results) {
+        if (clientId && r.clientId !== clientId) continue;
+        const sid = r.sessionId || "default";
+        if (!grouped.has(sid)) grouped.set(sid, []);
+        grouped.get(sid)!.push(r);
+      }
+    }
+
+    const summaries: SessionSummary[] = [];
+    for (const [sid, items] of grouped) {
+      const sorted = items.sort(
+        (a, b) =>
+          new Date(a.createdAt || 0).getTime() -
+          new Date(b.createdAt || 0).getTime(),
+      );
+      summaries.push({
+        sessionId: sid,
+        clientId: sorted[0].clientId,
+        title: sorted[0].title || sorted[0].question.slice(0, 50),
+        lastMessage: sorted[sorted.length - 1].answer.slice(0, 100),
+        messageCount: sorted.length,
+        createdAt: sorted[0].createdAt || "",
+        updatedAt: sorted[sorted.length - 1].createdAt || "",
+      });
+    }
+
+    return summaries.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  }
+
+  async deleteSession(
+    sessionId: string,
+    clientId: string,
+  ): Promise<boolean> {
+    const results = this.storage.get(sessionId);
+    if (!results) return false;
+    const remaining = results.filter((r) => r.clientId !== clientId);
+    if (remaining.length === results.length) return false;
+    if (remaining.length === 0) {
+      this.storage.delete(sessionId);
+    } else {
+      this.storage.set(sessionId, remaining);
+    }
+    return true;
   }
 
   clear(): void {
@@ -84,19 +135,27 @@ class TestSessionCacheService {
   async updateSession(
     sessionId: string,
     result: AnalysisResult,
+    clientId?: string,
   ): Promise<void> {
-    await this.chatHistoryPort.save(result);
+    const base = clientId ? { ...result, clientId } : { ...result };
+    const isFirst = await this.isFirstMessageInSession(sessionId);
+    const toSave =
+      isFirst && result.question
+        ? { ...base, title: result.question.slice(0, 50) }
+        : base;
+
+    await this.chatHistoryPort.save(toSave);
 
     const cached = this.activeSessions.get(sessionId);
     if (cached) {
-      cached.history.push(result);
+      cached.history.push(toSave);
       cached.lastAccessed = new Date();
       console.log(
         `[CACHE] Updated session ${sessionId} (now ${cached.history.length} messages)`,
       );
     } else {
       this.activeSessions.set(sessionId, {
-        history: [result],
+        history: [toSave],
         lastAccessed: new Date(),
         ttl: this.defaultTtl,
       });
@@ -104,10 +163,37 @@ class TestSessionCacheService {
     }
   }
 
+  async listSessions(clientId: string): Promise<SessionSummary[]> {
+    if (!clientId) return [];
+    return this.chatHistoryPort.listSessions(clientId);
+  }
+
+  async deleteSession(
+    sessionId: string,
+    clientId: string,
+  ): Promise<boolean> {
+    if (!sessionId || !clientId) return false;
+    const removed = await this.chatHistoryPort.deleteSession(
+      sessionId,
+      clientId,
+    );
+    if (removed) {
+      this.invalidateSession(sessionId);
+    }
+    return removed;
+  }
+
   invalidateSession(sessionId: string): void {
     if (this.activeSessions.delete(sessionId)) {
       console.log(`[CACHE] Invalidated session ${sessionId}`);
     }
+  }
+
+  private async isFirstMessageInSession(sessionId: string): Promise<boolean> {
+    const cached = this.activeSessions.get(sessionId);
+    if (cached && cached.history.length > 0) return false;
+    const fromDb = await this.chatHistoryPort.findBySessionId(sessionId);
+    return fromDb.length === 0;
   }
 
   private isExpired(cached: { lastAccessed: Date; ttl: number }): boolean {
@@ -141,9 +227,11 @@ function createTestResult(
   question: string,
   answer: string,
   index: number,
+  clientId?: string,
 ): AnalysisResult {
   return {
     sessionId,
+    ...(clientId ? { clientId } : {}),
     question,
     intent: AnalysisIntent.SEMANTIC,
     answer,
@@ -280,6 +368,109 @@ async function runTests() {
   }
   console.log();
 
+  // --- Phase 5.2 Tests ---
+
+  // Reset state for Phase 5.2 tests
+  mockDb.clear();
+  cacheService.clearCache();
+
+  const clientA = "client-aaa-111";
+  const clientB = "client-bbb-222";
+
+  // Test 9: clientId propagation
+  console.log("📝 Test 9: clientId propagation via updateSession");
+  console.log("-".repeat(60));
+  const sessA1 = "sess-a1";
+  const r9 = createTestResult(sessA1, "질문 with clientId", "답변", 1, clientA);
+  await cacheService.updateSession(sessA1, r9, clientA);
+  const h9 = await cacheService.getHistory(sessA1);
+  if (h9.length === 1 && h9[0].clientId === clientA) {
+    console.log("✅ PASS: clientId persisted in saved result");
+  } else {
+    console.log(`❌ FAIL: clientId mismatch — got ${h9[0]?.clientId}`);
+  }
+  console.log();
+
+  // Test 10: First-turn title generation
+  console.log("📝 Test 10: First-turn title generation");
+  console.log("-".repeat(60));
+  const sessA2 = "sess-a2";
+  const longQuestion = "이것은 50자를 넘는 아주 긴 질문입니다. 제목이 50자로 잘리는지 확인해야 합니다. 추가 텍스트.";
+  const r10 = createTestResult(sessA2, longQuestion, "답변10", 1, clientA);
+  await cacheService.updateSession(sessA2, r10, clientA);
+  const h10 = await cacheService.getHistory(sessA2);
+  const savedTitle = h10[0]?.title;
+  if (savedTitle && savedTitle.length <= 50 && longQuestion.startsWith(savedTitle)) {
+    console.log(`✅ PASS: title="${savedTitle}" (${savedTitle.length} chars, truncated correctly)`);
+  } else {
+    console.log(`❌ FAIL: title="${savedTitle}"`);
+  }
+  // Second message should NOT have title
+  const r10b = createTestResult(sessA2, "두번째 질문", "답변10b", 2, clientA);
+  await cacheService.updateSession(sessA2, r10b, clientA);
+  const h10b = await cacheService.getHistory(sessA2);
+  if (!h10b[1].title) {
+    console.log("✅ PASS: Second message has no title");
+  } else {
+    console.log(`❌ FAIL: Second message should not have title, got "${h10b[1].title}"`);
+  }
+  console.log();
+
+  // Test 11: listSessions filters by clientId
+  console.log("📝 Test 11: listSessions filters by clientId");
+  console.log("-".repeat(60));
+  // Add a session for clientB
+  const sessB1 = "sess-b1";
+  const r11 = createTestResult(sessB1, "ClientB question", "ClientB answer", 1, clientB);
+  await cacheService.updateSession(sessB1, r11, clientB);
+
+  const sessionsA = await cacheService.listSessions(clientA);
+  const sessionsB = await cacheService.listSessions(clientB);
+  if (sessionsA.length === 2 && sessionsA.every((s) => s.clientId === clientA)) {
+    console.log(`✅ PASS: clientA has ${sessionsA.length} sessions (sess-a1, sess-a2)`);
+  } else {
+    console.log(`❌ FAIL: Expected 2 sessions for clientA, got ${sessionsA.length}`);
+  }
+  if (sessionsB.length === 1 && sessionsB[0].sessionId === sessB1) {
+    console.log(`✅ PASS: clientB has ${sessionsB.length} session (sess-b1)`);
+  } else {
+    console.log(`❌ FAIL: Expected 1 session for clientB, got ${sessionsB.length}`);
+  }
+  console.log();
+
+  // Test 12: deleteSession with ownership guard
+  console.log("📝 Test 12: deleteSession with ownership guard");
+  console.log("-".repeat(60));
+  // clientB cannot delete clientA's session
+  const crossDelete = await cacheService.deleteSession(sessA1, clientB);
+  if (!crossDelete) {
+    console.log("✅ PASS: Cross-client deletion blocked");
+  } else {
+    console.log("❌ FAIL: Cross-client deletion should return false");
+  }
+  // clientA can delete own session
+  const ownDelete = await cacheService.deleteSession(sessA1, clientA);
+  if (ownDelete) {
+    console.log("✅ PASS: Owner deletion succeeded");
+  } else {
+    console.log("❌ FAIL: Owner deletion should return true");
+  }
+  // Verify cache evicted and DB empty
+  const h12 = await cacheService.getHistory(sessA1);
+  if (h12.length === 0) {
+    console.log("✅ PASS: Session removed from DB and cache");
+  } else {
+    console.log(`❌ FAIL: Expected 0 messages after delete, got ${h12.length}`);
+  }
+  // Verify listSessions updated
+  const sessionsAAfter = await cacheService.listSessions(clientA);
+  if (sessionsAAfter.length === 1) {
+    console.log("✅ PASS: listSessions reflects deletion");
+  } else {
+    console.log(`❌ FAIL: Expected 1 session after delete, got ${sessionsAAfter.length}`);
+  }
+  console.log();
+
   // Final stats
   console.log("=".repeat(60));
   console.log("Final Statistics");
@@ -297,6 +488,10 @@ async function runTests() {
   console.log("✅ Cache correctly falls back to DB when invalidated");
   console.log("✅ Multiple sessions are handled independently");
   console.log("✅ Cache is repopulated after DB fetch");
+  console.log("✅ clientId is propagated through updateSession");
+  console.log("✅ First-turn title is generated and truncated to 50 chars");
+  console.log("✅ listSessions returns only matching client sessions");
+  console.log("✅ deleteSession enforces ownership and evicts cache");
   console.log();
 }
 

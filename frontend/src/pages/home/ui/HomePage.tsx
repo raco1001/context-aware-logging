@@ -1,31 +1,39 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Activity,
   ArrowLeft,
   Layers,
+  Lock,
+  LockOpen,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react"
-import {
-  INITIAL_MESSAGES,
-  MOCK_ROUTE_METRICS,
-  MOCK_SESSIONS,
-  MOCK_STATS,
-  MOCK_STATUS_DISTRIBUTION,
-  generateTimeSeriesData,
-} from "@/shared/lib/loglens"
+import { INITIAL_MESSAGES } from "@/shared/lib/loglens"
 import type {
   AnalysisResult,
+  BreakdownRow,
   ChatMessage,
+  ChatSession,
+  ErrorTrendHalfWindow,
   LogStats,
+  PercentileRow,
   RouteMetric,
+  SessionSummary,
+  StatusDistribution,
   TimeSeriesPoint,
 } from "@/shared/lib/loglens"
 import { cn } from "@/shared/lib/cn"
-import { getSessionHistory, searchLogs } from "@/shared/api/logSearch"
 import {
+  deleteSession,
+  getSessionHistory,
+  getSessionList,
+  searchLogs,
+} from "@/shared/api/logSearch"
+import {
+  BreakdownWidget,
   ChatPanelWidget,
   LatencyChartWidget,
+  PercentilesWidget,
   RequestVolumeChartWidget,
   RouteMetricsChartWidget,
   RouteTableWidget,
@@ -34,29 +42,53 @@ import {
   StatusPieChartWidget,
 } from "@/widgets/loglens"
 
+const SESSION_LIST_REFRESH_MS = 500
+
+function mapSummariesToChatSessions(items: SessionSummary[]): ChatSession[] {
+  return items.map((s) => ({
+    id: s.sessionId,
+    title: s.title,
+    lastMessage: s.lastMessage,
+    createdAt: new Date(s.createdAt),
+    messageCount: s.messageCount,
+  }))
+}
+
 export function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() =>
+    localStorage.getItem("loglens-active-session"),
+  )
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const refreshSessionsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
   const [messages, setMessages] = useState<ChatMessage[]>(
     INITIAL_MESSAGES.map((m) => ({ ...m, timestamp: new Date() })),
   )
   const [isLoading, setIsLoading] = useState(false)
   const [analyticsOverview, setAnalyticsOverview] =
-    useState<LogStats | null>(MOCK_STATS)
+    useState<LogStats | null>(null)
   const [analyticsTimeseries, setAnalyticsTimeseries] = useState<
     TimeSeriesPoint[]
-  >(generateTimeSeriesData())
-  const [analyticsRoutes, setAnalyticsRoutes] =
-    useState<RouteMetric[]>(MOCK_ROUTE_METRICS)
+  >([])
+  const [analyticsRoutes, setAnalyticsRoutes] = useState<RouteMetric[]>([])
+  const [analyticsStatusDistribution, setAnalyticsStatusDistribution] =
+    useState<StatusDistribution[] | null>(null)
+  const [analyticsBreakdown, setAnalyticsBreakdown] = useState<
+    BreakdownRow[] | null
+  >(null)
+  const [analyticsPercentiles, setAnalyticsPercentiles] = useState<
+    PercentileRow[] | null
+  >(null)
+  const [analyticsHalfWindow, setAnalyticsHalfWindow] = useState<
+    ErrorTrendHalfWindow | null
+  >(null)
   const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false)
   const [showOverviewCard, setShowOverviewCard] = useState(false)
   const [showRoutesPanel, setShowRoutesPanel] = useState(false)
-
-  // Regenerate time series data on mount to ensure fresh data
-  useEffect(() => {
-    const fresh = generateTimeSeriesData()
-    setAnalyticsTimeseries(fresh)
-  }, [])
+  const [isChartLocked, setIsChartLocked] = useState(false)
 
   const mapHistoryToMessages = useCallback(
     (items: AnalysisResult[]): ChatMessage[] => {
@@ -64,15 +96,121 @@ export function HomePage() {
         return INITIAL_MESSAGES.map((m) => ({ ...m, timestamp: new Date() }))
       }
 
-      return items.map((item, index) => ({
-        id: `hist-${index}-${item.sessionId ?? "session"}`,
-        role: "assistant",
-        content: item.answer || "",
-        timestamp: item.createdAt ? new Date(item.createdAt) : new Date(),
-        sources: item.sources,
-      }))
+      return items.flatMap((item, index) => {
+        const ts = item.createdAt ? new Date(item.createdAt) : new Date()
+        const messages: ChatMessage[] = []
+        if (item.question) {
+          messages.push({
+            id: `hist-${index}-user-${item.sessionId ?? "session"}`,
+            role: "user",
+            content: item.question,
+            timestamp: ts,
+          })
+        }
+        messages.push({
+          id: `hist-${index}-${item.sessionId ?? "session"}`,
+          role: "assistant",
+          content: item.answer || "",
+          timestamp: ts,
+          sources: item.sources,
+        })
+        return messages
+      })
     },
     [],
+  )
+
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    try {
+      const { res, data } = await getSessionList()
+      if (res.ok && Array.isArray(data)) {
+        setSessions(mapSummariesToChatSessions(data))
+      }
+    } finally {
+      setSessionsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadSessions()
+  }, [loadSessions])
+
+  useEffect(() => {
+    const stored = localStorage.getItem("loglens-active-session")
+    if (!stored) return
+    let cancelled = false
+    ;(async () => {
+      setIsLoading(true)
+      try {
+        const { res, data } = await getSessionHistory(stored)
+        if (cancelled) return
+        if (res.ok && Array.isArray(data)) {
+          setMessages(mapHistoryToMessages(data))
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [mapHistoryToMessages])
+
+  useEffect(() => {
+    if (activeSessionId) {
+      localStorage.setItem("loglens-active-session", activeSessionId)
+    }
+  }, [activeSessionId])
+
+  useEffect(() => {
+    setIsChartLocked(false)
+  }, [activeSessionId])
+
+  const scheduleSessionListRefresh = useCallback(() => {
+    if (refreshSessionsTimeoutRef.current) {
+      clearTimeout(refreshSessionsTimeoutRef.current)
+    }
+    refreshSessionsTimeoutRef.current = setTimeout(() => {
+      refreshSessionsTimeoutRef.current = null
+      void (async () => {
+        const { res, data } = await getSessionList()
+        if (res.ok && Array.isArray(data)) {
+          setSessions(mapSummariesToChatSessions(data))
+        }
+      })()
+    }, SESSION_LIST_REFRESH_MS)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (refreshSessionsTimeoutRef.current) {
+        clearTimeout(refreshSessionsTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleClearActiveSession = useCallback(() => {
+    localStorage.removeItem("loglens-active-session")
+    setActiveSessionId(null)
+  }, [])
+
+  const handleDeleteSession = useCallback(
+    async (id: string) => {
+      const { res, data } = await deleteSession(id)
+      if (!res.ok || ("error" in data && data.error)) {
+        return
+      }
+      setSessions((prev) => prev.filter((s) => s.id !== id))
+      if (activeSessionId === id) {
+        localStorage.removeItem("loglens-active-session")
+        setActiveSessionId(null)
+        setMessages(
+          INITIAL_MESSAGES.map((m) => ({ ...m, timestamp: new Date() })),
+        )
+      }
+    },
+    [activeSessionId],
   )
 
   const handleSendMessage = useCallback(
@@ -124,8 +262,14 @@ export function HomePage() {
           const normalizedViewType = result.viewType ?? "chat"
           const hasSources = Array.isArray(result.sources) && result.sources.length > 0
           const hasAnswer = Boolean(result.answer && result.answer.trim())
+          /** SEMANTIC-only: STATISTICAL answers use aggregation as evidence, not source chunks. */
           const noSourceGuidance =
-            hasAnswer && !hasSources ? "\n\n관련 로그를 찾지 못했습니다. 조건을 완화해서 다시 시도해 주세요." : ""
+            hasAnswer &&
+            !hasSources &&
+            normalizedIntent !== "STATISTICAL" &&
+            !result.statsPayload
+              ? "\n\n관련 로그를 찾지 못했습니다. 조건을 완화해서 다시 시도해 주세요."
+              : ""
           const fallbackAnswer =
             normalizedIntent === "UNKNOWN"
               ? "분석 의도를 파악하지 못했습니다. 에러 코드, 서비스, 시간 범위를 포함해 다시 질문해 주세요."
@@ -146,38 +290,72 @@ export function HomePage() {
             analyticsEnabledByViewType &&
             Boolean(result.statsPayload)
 
-          setShowAnalyticsPanel(analyticsAvailable)
+          if (!isChartLocked) {
+            setShowAnalyticsPanel(analyticsAvailable)
 
-          // Conversational/Semantic should stay chat-focused.
-          if (!analyticsAvailable) {
-            setShowOverviewCard(false)
-            setShowRoutesPanel(false)
-          }
-
-          if (analyticsAvailable && result.statsPayload) {
-            if (result.statsPayload.overview) {
-              setAnalyticsOverview((prev) => ({
-                ...(prev || MOCK_STATS),
-                ...(result.statsPayload!.overview as Partial<LogStats>),
-              }))
-              setShowOverviewCard(true)
-            } else {
+            // Conversational/Semantic should stay chat-focused.
+            if (!analyticsAvailable) {
               setShowOverviewCard(false)
-            }
-            if (result.statsPayload.timeseries) {
-              setAnalyticsTimeseries(
-                (result.statsPayload.timeseries as TimeSeriesPoint[]) || [],
-              )
-            }
-            if (result.statsPayload.routes) {
-              setAnalyticsRoutes(
-                (result.statsPayload.routes as RouteMetric[]) || [],
-              )
-              setShowRoutesPanel(true)
-            } else {
               setShowRoutesPanel(false)
+              setAnalyticsStatusDistribution(null)
+              setAnalyticsBreakdown(null)
+              setAnalyticsPercentiles(null)
+              setAnalyticsHalfWindow(null)
+            }
+
+            if (analyticsAvailable && result.statsPayload) {
+              if (result.statsPayload.overview) {
+                setAnalyticsOverview(
+                  result.statsPayload.overview as LogStats,
+                )
+                setShowOverviewCard(true)
+              } else {
+                setShowOverviewCard(false)
+              }
+              const ts = result.statsPayload.timeseries
+              setAnalyticsTimeseries(
+                Array.isArray(ts) ? (ts as TimeSeriesPoint[]) : [],
+              )
+              if (result.statsPayload.routes) {
+                setAnalyticsRoutes(
+                  (result.statsPayload.routes as RouteMetric[]) || [],
+                )
+                setShowRoutesPanel(true)
+              } else {
+                setShowRoutesPanel(false)
+              }
+              const dist = result.statsPayload.statusDistribution
+              if (dist && dist.length > 0) {
+                setAnalyticsStatusDistribution(dist)
+              } else {
+                setAnalyticsStatusDistribution(null)
+              }
+              const bd = result.statsPayload.breakdown
+              if (Array.isArray(bd) && bd.length > 0) {
+                setAnalyticsBreakdown(bd as BreakdownRow[])
+              } else {
+                setAnalyticsBreakdown(null)
+              }
+              const pct = result.statsPayload.percentiles
+              if (Array.isArray(pct) && pct.length > 0) {
+                setAnalyticsPercentiles(pct as PercentileRow[])
+              } else {
+                setAnalyticsPercentiles(null)
+              }
+              const hw = result.statsPayload.halfWindow
+              if (
+                hw &&
+                typeof hw.firstErrorRatePct === "number" &&
+                typeof hw.secondErrorRatePct === "number"
+              ) {
+                setAnalyticsHalfWindow(hw)
+              } else {
+                setAnalyticsHalfWindow(null)
+              }
             }
           }
+
+          scheduleSessionListRefresh()
         }
       } catch (error) {
         // eslint-disable-next-line no-console
@@ -194,12 +372,22 @@ export function HomePage() {
         setIsLoading(false)
       }
     },
-    [activeSessionId],
+    [activeSessionId, isChartLocked, scheduleSessionListRefresh],
   )
 
   const handleNewSession = useCallback(() => {
     const newId = `sess-${Date.now()}`
     setActiveSessionId(newId)
+    setSessions((prev) => [
+      {
+        id: newId,
+        title: "New session",
+        lastMessage: "",
+        createdAt: new Date(),
+        messageCount: 0,
+      },
+      ...prev.filter((s) => s.id !== newId),
+    ])
     setMessages(
       INITIAL_MESSAGES.map((m) => ({
         ...m,
@@ -311,10 +499,12 @@ export function HomePage() {
           )}
         >
           <SessionSidebarWidget
-            sessions={MOCK_SESSIONS}
+            sessions={sessions}
             activeSessionId={activeSessionId ?? ""}
             onSelectSession={handleSelectSession}
             onNewSession={handleNewSession}
+            onDeleteSession={handleDeleteSession}
+            sessionsLoading={sessionsLoading}
           />
         </div>
 
@@ -327,7 +517,7 @@ export function HomePage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setActiveSessionId(null)}
+                    onClick={handleClearActiveSession}
                     className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   >
                     <ArrowLeft className="size-3.5" />
@@ -361,17 +551,99 @@ export function HomePage() {
                     />
                   </div>
                   {showAnalyticsPanel ? (
-                    <div className="flex flex-col gap-4 overflow-auto lg:col-span-2">
-                      {showOverviewCard && analyticsOverview && (
-                        <StatsOverviewWidget stats={analyticsOverview} />
+                    <div
+                      className={cn(
+                        "flex flex-col gap-4 overflow-auto rounded-xl p-1 transition-[box-shadow,border-color] lg:col-span-2",
+                        isChartLocked
+                          ? "border border-amber-500/35 bg-amber-500/4 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.12)]"
+                          : "border border-transparent",
                       )}
-                      <div className="grid gap-4">
-                        <RequestVolumeChartWidget data={analyticsTimeseries} />
-                        <LatencyChartWidget data={analyticsTimeseries} />
+                    >
+                      <div className="flex shrink-0 items-center justify-between gap-2 px-1 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setIsChartLocked((v) => !v)}
+                          className={cn(
+                            "inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                            isChartLocked
+                              ? "bg-amber-500/15 text-amber-900 dark:text-amber-100"
+                              : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                          )}
+                          aria-pressed={isChartLocked}
+                          aria-label={
+                            isChartLocked
+                              ? "Unlock analytics updates"
+                              : "Lock analytics snapshot"
+                          }
+                        >
+                          {isChartLocked ? (
+                            <Lock className="size-3.5" />
+                          ) : (
+                            <LockOpen className="size-3.5" />
+                          )}
+                          <span>
+                            {isChartLocked ? "Snapshot" : "Live updates"}
+                          </span>
+                        </button>
+                        {isChartLocked ? (
+                          <span className="rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:text-amber-100">
+                            Snapshot
+                          </span>
+                        ) : null}
                       </div>
+                      {showOverviewCard ? (
+                        analyticsOverview ? (
+                          <StatsOverviewWidget
+                            stats={analyticsOverview}
+                            percentiles={
+                              analyticsPercentiles ?? undefined
+                            }
+                            timeseries={
+                              analyticsTimeseries.length > 0
+                                ? analyticsTimeseries
+                                : undefined
+                            }
+                            halfWindow={
+                              analyticsHalfWindow ?? undefined
+                            }
+                          />
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                            No stats available
+                          </div>
+                        )
+                      ) : null}
+                      {analyticsBreakdown && analyticsBreakdown.length > 0 ? (
+                        <BreakdownWidget
+                          title="Breakdown"
+                          rows={analyticsBreakdown}
+                        />
+                      ) : null}
+                      {analyticsPercentiles &&
+                      analyticsPercentiles.length > 0 ? (
+                        <PercentilesWidget rows={analyticsPercentiles} />
+                      ) : null}
+                      {analyticsTimeseries.length > 0 ? (
+                        <div className="grid gap-4">
+                          <RequestVolumeChartWidget
+                            data={analyticsTimeseries}
+                          />
+                          {analyticsTimeseries.some(
+                            (p) =>
+                              typeof p.averageDurationMs === "number",
+                          ) ? (
+                            <LatencyChartWidget data={analyticsTimeseries} />
+                          ) : null}
+                        </div>
+                      ) : null}
                       {showRoutesPanel && (
                         <div className="grid gap-4">
-                          <StatusPieChartWidget data={MOCK_STATUS_DISTRIBUTION} />
+                          {analyticsStatusDistribution &&
+                          analyticsStatusDistribution.length > 0 ? (
+                            <StatusPieChartWidget
+                              data={analyticsStatusDistribution}
+                            />
+                          ) : null}
                           <RouteMetricsChartWidget data={analyticsRoutes} />
                         </div>
                       )}

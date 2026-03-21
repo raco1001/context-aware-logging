@@ -89,6 +89,8 @@
 | Phase 4 | RAG 기반의 로그 검색 및 지능형 분석 시스템 구축       | ✅   |
 | Phase 5 | 운영 안정화(Hardening): MQ, 캐싱, 샘플링 전략 적용    | ✅   |
 
+**저장소 기준 현재 범위**: 위 Phase 목표 외에, **LogLens** 웹 클라이언트(검색 API와 세션 기반 대화)와 **통계·집계 분석** 경로(메트릭 템플릿: 에러율, 지연 백분위수 등)가 포함되어 있습니다. 자연어 **쿼리 분류**로 시간 범위·필터를 추출하고, MongoDB 집계로 **시간 버킷 시계열**을 만들며, **짧은 구간**에서는 버킷 폭을 조절해 차트 가독성과 응답 크기를 맞춥니다. 반복 검수·감사 내용은 `journals/` 등에 남깁니다.
+
 ---
 
 ## D. 아키텍처 철학
@@ -100,7 +102,7 @@
 - Phase 단계 별로 프로젝트를 구현하는 특징이 있는 만큼, 도메인 영역의 코드는 유지하되, 단계 별로 도메인의 규칙을 동일하게 지키는 서로 다른 외부 서비스 사용 기능(Outbound Adapter)들을 구현하는게 편리하다고 판단했습니다.
 - 이번 프로젝트는 로깅 성능의 최적화가 목표가 아니기도 하고, 이해하고 추적하기 쉬운 코드를 유지하는 것이 중요하다고 느꼈습니다.
 - 더욱이, 서로를 대체하는 방식으로 구현된 외부 서비스 사용 기능들은 경우에 따라 동일한 런타임에 서로를 보완할 수 있다고도 생각했습니다 \
-  ([Phase 6 문서](docs/ko/06-phase-additional-ko.md))
+  ([Phase 6 문서 (KO)](docs/ko/06-phase-additional-ko.md))
 
 ### D-2. 개선 / 전략 추가 (Hardening) 관점
 
@@ -114,7 +116,7 @@
   - Phase 5에서 로깅시스템이 갑자기 중단되어도 재시작후 이전 로그데이터를 다시 전송할 수 있도록 구현했습니다.
 - **상태 관리를 위한 Redis**:
   - 캐싱을 통해 애플리케이션을 무상태(Stateless)로 유지, 수평 확장성을 확보하는 용도로 이해하고,
-  - Phase 5에서 로깅 시스템 사용자의 조회 이력을 캐싱하는 용도로 구혔습니다.
+  - Phase 5에서 로깅 시스템 사용자의 조회 이력을 캐싱하는 용도로 구현했습니다.
 
 #### 2. 트레이드오프
 
@@ -139,22 +141,28 @@
   > 3. 인프라 재시작 시에도 세션 데이터 유지 확인.
   > 4. 인프라 재시작 시에도 Kafka 에 머무르던 로그데이터를 백엔드 Consumer 로직이 MongoDB에 정상적으로 저장하는 것을 확인.
 
+### D-3. 프론트엔드 및 통계 UX (LogLens)
+
+**LogLens** 앱(`frontend/`, React + Vite + Tailwind, FSD 구조)은 **데모 클라이언트**로, curl 과 동일한 `/search/ask` 흐름을 끝까지 검증하기 위한 것입니다. 근거가 있는 서술형 답과 함께, 백엔드가 구조화된 통계를 돌려줄 때 **요약 카드·요청량 시계열·지연 백분위수·반창 에러 추세** 등을 화면에 표시합니다. 핵심 서사는 여전히 아키텍처와 관측 가능성이며, UI는 제품 수준이 아니라 **터미널만으로는 보기 어려운 통계·의미 검색 결과를 확인하는 용도**에 가깝습니다.
+
 ---
 
 ## E. 작업 기간 및 기술 스택
 
 ### 작업 기간:
 
-- 2025.12.24 ~ 2026.01.05 (12일)
+- 초기 집중 구현: 2025.12.24 ~ 2026.01.05 (12일)
+- 이후: 지속 보완 (LogLens, 통계 집계 UX, `journals/`에 정리된 감사 등)
 
 ### 기술 스택
 
 - **백엔드**: NestJS, TypeScript
+- **프론트엔드(데모 UI)**: React, Vite, TypeScript, Tailwind CSS, Recharts (LogLens)
 - **관측 가능성 구현**: Custom Wide Event Context (AsyncLocalStorage)
-- **데이터 저장소**: Local (JSON), MongoDB (Time-series), Vector DB (Pinecone/Atlas)
-- **AI / RAG**: LLM (Gemini flash 2.0 / VoyageAI) + Embeddings Module(백엔드)
-- **Infra (Local)**: Docker Compose (MongoDB(atlas_local), kafka, zookeeper, redis)
-- **Tooling**: Cursor, pnpm, test_data/ 프로그램 (bash, JavaScript)
+- **데이터 저장소**: Local (JSON), MongoDB (시계열 `logs`), 임베딩 파이프라인(백엔드 모듈; 벡터 저장소 구성은 환경에 따라 다를 수 있음)
+- **AI / RAG**: LLM (Gemini Flash 계열) + VoyageAI 임베딩 + 백엔드 임베딩·검색 모듈
+- **Infra (Local)**: Docker Compose (MongoDB, Kafka, Zookeeper, Redis)
+- **Tooling**: Cursor, pnpm, `test_data/` 부하·목 트래픽 유틸
 
 ---
 
@@ -169,21 +177,21 @@
 ❌ **이 프로젝트는:**
 
 - 즉시 사용 가능한 SaaS 제품이 아닙니다.
-- UI/UX 중심의 애플리케이션이 아닙니다.
+- UI/UX·디자인 시스템을 앞세운 애플리케이션이 아닙니다. (LogLens는 검색·통계 검증을 위한 얇은 클라이언트입니다.)
 - 일반적인 CRUD 데모 프로젝트가 아닙니다.
-- 성능을 우선적인 목표로 삼은 프로젝트가 아닙니다.
+- 성능을 최우선 목표로 삼은 프로젝트가 아닙니다.
 
 ---
 
 ## G. 상세 문서
 
-각 단계별 상세 설계 및 구현 노트는 [docs/ko](docs/ko) 디렉토리를 참고해주세요!
+Phase별 설계·구현 노트: **[docs/en](docs/en)** (영문), **[docs/ko](docs/ko)** (한국어). 추가 주제: [docs/en/06-phase-additional.md](docs/en/06-phase-additional.md), [docs/ko/06-phase-additional-ko.md](docs/ko/06-phase-additional-ko.md).
 
 ---
 
 ## H. 면책 조항
 
 - 이 프로젝트는 확장성이나 UI의 완결성보다 **아키텍처, 보안, 그리고 옵저버빌리티의 원칙**을 우선시하여 설계되었습니다.
-- 성능 최적화, 로깅 전략 고도화 등의 부가적으로 고려해볼 수 있는 주제는 [docs/의 Phase 6](docs/06-phase-additional.md) 문서에 업데이트 하고 있습니다.
+- 실험적 기능과 후속 아이디어는 위 Phase 6 성격의 문서와 `journals/`에 정리합니다.
 
 ---

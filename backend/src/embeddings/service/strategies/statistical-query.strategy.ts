@@ -6,10 +6,13 @@ import {
 } from '@embeddings/out-ports';
 import {
   AnalysisResult,
+  ErrorTrendHalfWindow,
   LogSource,
   LogStats,
+  PercentileRow,
   RouteMetric,
   StatsPayload,
+  TimeSeriesPoint,
 } from '@embeddings/dtos';
 import { AnalysisIntent } from '@embeddings/value-objects/filter';
 import { SessionCacheService } from '../../infrastructure/cache/session-cache.service';
@@ -52,6 +55,7 @@ export class StatisticalQueryStrategy implements QueryStrategy {
       metadata,
       history,
       sessionId,
+      clientId,
       targetLanguage,
     } = context;
 
@@ -60,13 +64,17 @@ export class StatisticalQueryStrategy implements QueryStrategy {
     );
 
     try {
-      const { templateId, params } =
-        await this.synthesisPort.analyzeStatisticalQuery(
-          reformulatedQuery,
-          metadata,
+      if (!context.templateId || !context.templateParams) {
+        throw new Error(
+          `StatisticalQueryStrategy requires templateId and templateParams in context (got templateId=${context.templateId ?? 'null'}). Routing mismatch?`,
         );
+      }
+
+      const templateId = context.templateId;
+      const params = context.templateParams;
+
       this.logger.log(
-        `LLM detected template: ${templateId}, params: ${JSON.stringify(params)}`,
+        `Template from context: ${templateId}, params: ${JSON.stringify(params)}`,
       );
 
       const aggregationResults = await this.aggregation.executeTemplate(
@@ -113,7 +121,7 @@ export class StatisticalQueryStrategy implements QueryStrategy {
         verificationContext,
       );
 
-      const statsPayload = this.buildStatsPayload(aggregationResults);
+      const statsPayload = this.buildStatsPayload(aggregationResults, templateId);
       const sources = this.toLogSourcesFromAggregation(aggregationResults);
 
       const result: AnalysisResult = {
@@ -129,7 +137,7 @@ export class StatisticalQueryStrategy implements QueryStrategy {
       };
 
       if (sessionId) {
-        await this.sessionCache.updateSession(sessionId, result);
+        await this.sessionCache.updateSession(sessionId, result, clientId);
       }
 
       return result;
@@ -243,8 +251,288 @@ export class StatisticalQueryStrategy implements QueryStrategy {
     return { finalAnswer, finalConfidence };
   }
 
-  private buildStatsPayload(aggregationResults: any[]): StatsPayload {
+  private buildStatsPayload(
+    aggregationResults: any[],
+    templateId: string,
+  ): StatsPayload {
     const results = Array.isArray(aggregationResults) ? aggregationResults : [];
+    switch (templateId) {
+      case 'ERROR_RATE':
+        return this.buildErrorRateStatsPayload(results);
+      case 'TOP_ERROR_CODES':
+        return this.buildTopErrorCodesStatsPayload(results);
+      case 'ERROR_DISTRIBUTION_BY_ROUTE':
+        return this.buildErrorDistributionByRouteStatsPayload(results);
+      case 'LATENCY_PERCENTILE':
+        return this.buildLatencyPercentileStatsPayload(results);
+      case 'ERROR_BY_SERVICE':
+        return this.buildErrorByServiceStatsPayload(results);
+      default:
+        return this.buildLegacyStatsPayload(results);
+    }
+  }
+
+  /**
+   * ERROR_RATE: `$facet` shape `{ summary, series, latency?, trendHalves? }` or legacy
+   * single row `{ totalCount, errorCount, errorRate }`.
+   */
+  private buildErrorRateStatsPayload(results: any[]): StatsPayload {
+    const first = results[0];
+    if (
+      first &&
+      typeof first === 'object' &&
+      Array.isArray(first.summary) &&
+      first.series !== undefined
+    ) {
+      const row = first.summary[0];
+      const timeseries = this.mapErrorRateSeriesToTimeSeries(first.series);
+      const latencyRow = Array.isArray(first.latency) ? first.latency[0] : undefined;
+      const { percentiles, averageDurationMs } =
+        this.mapErrorRateLatencyFacetRow(latencyRow);
+      const halfWindow = this.parseErrorRateTrendHalves(first.trendHalves);
+
+      if (!row) {
+        return {
+          overview: {
+            totalRequests: 0,
+            failedRequests: 0,
+            successRate: 1,
+            ...(averageDurationMs !== undefined ? { averageDurationMs } : {}),
+          },
+          timeseries: timeseries.length > 0 ? timeseries : undefined,
+          percentiles,
+          halfWindow,
+          raw: results,
+        };
+      }
+      const totalRequests = row.totalCount;
+      const failedRequests = row.errorCount;
+      const successRate =
+        typeof row.errorRate === 'number'
+          ? 1 - row.errorRate / 100
+          : totalRequests > 0
+            ? (totalRequests - failedRequests) / totalRequests
+            : 0;
+
+      return {
+        overview: {
+          totalRequests,
+          failedRequests,
+          successRate: this.normalizeRate(successRate),
+          ...(averageDurationMs !== undefined ? { averageDurationMs } : {}),
+        },
+        timeseries: timeseries.length > 0 ? timeseries : undefined,
+        percentiles,
+        halfWindow,
+        raw: results,
+      };
+    }
+
+    const row = results[0];
+    if (
+      !row ||
+      typeof row.totalCount !== 'number' ||
+      typeof row.errorCount !== 'number'
+    ) {
+      return { raw: results };
+    }
+    const totalRequests = row.totalCount;
+    const failedRequests = row.errorCount;
+    const successRate =
+      typeof row.errorRate === 'number'
+        ? 1 - row.errorRate / 100
+        : totalRequests > 0
+          ? (totalRequests - failedRequests) / totalRequests
+          : 0;
+
+    return {
+      overview: {
+        totalRequests,
+        failedRequests,
+        successRate: this.normalizeRate(successRate),
+      },
+      raw: results,
+    };
+  }
+
+  private mapErrorRateSeriesToTimeSeries(series: any): TimeSeriesPoint[] {
+    if (!Array.isArray(series)) return [];
+    const out: TimeSeriesPoint[] = [];
+    for (const r of series) {
+      if (
+        r &&
+        typeof r.bucket === 'string' &&
+        typeof r.total === 'number' &&
+        typeof r.failed === 'number'
+      ) {
+        out.push({
+          bucket: r.bucket,
+          total: r.total,
+          failed: r.failed,
+        });
+      }
+    }
+    return out;
+  }
+
+  /** Latency facet row: same shape as LATENCY_PERCENTILE single document. */
+  private mapErrorRateLatencyFacetRow(row: any): {
+    percentiles?: PercentileRow[];
+    averageDurationMs?: number;
+  } {
+    if (!row || typeof row.count !== 'number' || row.count < 1) {
+      return {};
+    }
+    const count = row.count;
+    const percentiles: PercentileRow[] = [];
+    if (typeof row.p50 === 'number') {
+      percentiles.push({
+        percentile: 'P50',
+        valueMs: row.p50,
+        requestCount: count,
+      });
+    }
+    if (typeof row.p95 === 'number') {
+      percentiles.push({
+        percentile: 'P95',
+        valueMs: row.p95,
+        requestCount: count,
+      });
+    }
+    if (typeof row.p99 === 'number') {
+      percentiles.push({
+        percentile: 'P99',
+        valueMs: row.p99,
+        requestCount: count,
+      });
+    }
+    const averageDurationMs =
+      typeof row.p50 === 'number'
+        ? row.p50
+        : typeof row.avg === 'number'
+          ? row.avg
+          : undefined;
+
+    return {
+      percentiles: percentiles.length > 0 ? percentiles : undefined,
+      averageDurationMs,
+    };
+  }
+
+  private parseErrorRateTrendHalves(
+    trendHalves: any,
+  ): ErrorTrendHalfWindow | undefined {
+    if (!Array.isArray(trendHalves) || trendHalves.length === 0) {
+      return undefined;
+    }
+    const first = trendHalves.find((x: any) => x._id === 'first');
+    const second = trendHalves.find((x: any) => x._id === 'second');
+    if (
+      !first ||
+      !second ||
+      typeof first.errorRatePct !== 'number' ||
+      typeof second.errorRatePct !== 'number'
+    ) {
+      return undefined;
+    }
+    return {
+      firstErrorRatePct: first.errorRatePct,
+      secondErrorRatePct: second.errorRatePct,
+    };
+  }
+
+  /** TOP_ERROR_CODES: rows { errorCode, count, examples }. */
+  private buildTopErrorCodesStatsPayload(results: any[]): StatsPayload {
+    const breakdown = results.map((r) => ({
+      label: String(r.errorCode ?? 'unknown'),
+      count: typeof r.count === 'number' ? r.count : 0,
+    }));
+    return {
+      breakdown: breakdown.length > 0 ? breakdown : undefined,
+      raw: results,
+    };
+  }
+
+  /** ERROR_DISTRIBUTION_BY_ROUTE: rows { route, count, errorCodes? }. */
+  private buildErrorDistributionByRouteStatsPayload(results: any[]): StatsPayload {
+    const routes: RouteMetric[] = results.map((r) => {
+      const count = typeof r.count === 'number' ? r.count : 0;
+      return {
+        route: typeof r.route === 'string' ? r.route : String(r.route ?? ''),
+        failed: count,
+        total: count,
+      };
+    });
+    return {
+      routes: routes.length > 0 ? routes : undefined,
+      raw: results,
+    };
+  }
+
+  /** LATENCY_PERCENTILE: single row { count, p50, p95, p99, avg, max }. */
+  private buildLatencyPercentileStatsPayload(results: any[]): StatsPayload {
+    const row = results[0];
+    if (!row) {
+      return { raw: results };
+    }
+    const count = typeof row.count === 'number' ? row.count : 0;
+    const percentiles: { percentile: string; valueMs: number; requestCount?: number }[] =
+      [];
+    if (typeof row.p50 === 'number') {
+      percentiles.push({
+        percentile: 'P50',
+        valueMs: row.p50,
+        requestCount: count,
+      });
+    }
+    if (typeof row.p95 === 'number') {
+      percentiles.push({
+        percentile: 'P95',
+        valueMs: row.p95,
+        requestCount: count,
+      });
+    }
+    if (typeof row.p99 === 'number') {
+      percentiles.push({
+        percentile: 'P99',
+        valueMs: row.p99,
+        requestCount: count,
+      });
+    }
+
+    const averageDurationMs =
+      typeof row.p50 === 'number'
+        ? row.p50
+        : typeof row.avg === 'number'
+          ? row.avg
+          : undefined;
+
+    return {
+      overview: {
+        totalRequests: count,
+        failedRequests: 0,
+        successRate: 1,
+        ...(averageDurationMs !== undefined ? { averageDurationMs } : {}),
+      },
+      percentiles: percentiles.length > 0 ? percentiles : undefined,
+      raw: results,
+    };
+  }
+
+  /** ERROR_BY_SERVICE: rows { service, count, topErrorCodes? }. */
+  private buildErrorByServiceStatsPayload(results: any[]): StatsPayload {
+    const breakdown = results.map((r) => ({
+      label: typeof r.service === 'string' ? r.service : String(r.service ?? 'unknown'),
+      count: typeof r.count === 'number' ? r.count : 0,
+    }));
+    return {
+      breakdown: breakdown.length > 0 ? breakdown : undefined,
+      raw: results,
+    };
+  }
+
+  /** Generic probe-based mapping for unknown / future templates. */
+  private buildLegacyStatsPayload(results: any[]): StatsPayload {
     const overview: Partial<LogStats> = {};
     const routes: RouteMetric[] = [];
 
@@ -257,7 +545,7 @@ export class StatisticalQueryStrategy implements QueryStrategy {
         const failedRequests = row.errorCount;
         const successRate =
           typeof row.errorRate === 'number'
-            ? 1 - row.errorRate
+            ? 1 - row.errorRate / 100
             : totalRequests > 0
               ? (totalRequests - failedRequests) / totalRequests
               : 0;
@@ -285,15 +573,19 @@ export class StatisticalQueryStrategy implements QueryStrategy {
       typeof overview.successRate === 'number' ||
       typeof overview.averageDurationMs === 'number';
 
+    const overviewOut: LogStats | undefined = hasOverview
+      ? {
+          totalRequests: overview.totalRequests ?? 0,
+          failedRequests: overview.failedRequests ?? 0,
+          successRate: overview.successRate ?? 0,
+          ...(typeof overview.averageDurationMs === 'number'
+            ? { averageDurationMs: overview.averageDurationMs }
+            : {}),
+        }
+      : undefined;
+
     return {
-      overview: hasOverview
-        ? {
-            totalRequests: overview.totalRequests ?? 0,
-            failedRequests: overview.failedRequests ?? 0,
-            successRate: overview.successRate ?? 0,
-            averageDurationMs: overview.averageDurationMs ?? 0,
-          }
-        : undefined,
+      overview: overviewOut,
       routes: routes.length > 0 ? routes : undefined,
       raw: results,
     };

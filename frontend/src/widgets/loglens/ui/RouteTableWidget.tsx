@@ -27,52 +27,58 @@ export function RouteTableWidget({ data }: RouteTableProps) {
             </tr>
           </thead>
           <tbody>
-            {data.map((route) => {
-              const total = route.total ?? 0
-              const failed = route.failed ?? 0
-              const averageDurationMs = route.averageDurationMs ?? 0
-              const derivedErrorPct =
-                total > 0 ? (failed / total) * 100 : undefined
-              const errorPct = (
-                derivedErrorPct ?? (route.successRate !== undefined ? 100 - route.successRate : 0)
-              ).toFixed(1)
-              const errorLevel =
-                Number(errorPct) > 10
-                  ? "text-destructive"
-                  : Number(errorPct) > 5
-                  ? "text-warning"
-                  : "text-success"
-              return (
-                <tr
-                  key={route.route}
-                  className="border-b border-border/50 last:border-0 transition-colors hover:bg-muted/30"
+            {data.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="py-8 text-center text-muted-foreground"
                 >
-                  <td className="py-2.5 pr-4 font-mono font-medium text-foreground">
-                    {route.route}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
-                    {total > 0 ? `${(total / 1000).toFixed(1)}k` : "N/A"}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-destructive">
-                    {failed.toLocaleString()}
-                  </td>
-                  <td className={cn("py-2.5 px-3 text-right font-mono font-medium", errorLevel)}>
-                    {errorPct}%
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
-                    {route.averageDurationMs !== undefined ? `${averageDurationMs}ms` : "N/A"}
-                  </td>
-                  <td
-                    className={cn(
-                      "py-2.5 pl-3 text-right font-mono",
-                      averageDurationMs > 2000 ? "text-destructive" : "text-muted-foreground"
-                    )}
+                  No data
+                </td>
+              </tr>
+            ) : (
+              data.map((route) => {
+                const total = route.total ?? 0
+                const failed = route.failed ?? 0
+                const averageDurationMs = route.averageDurationMs ?? 0
+                const derivedErrorPct =
+                  total > 0 ? (failed / total) * 100 : undefined
+                const errorPct = (
+                  derivedErrorPct ?? (route.successRate !== undefined ? 100 - route.successRate : 0)
+                ).toFixed(1)
+                const errorLevel =
+                  Number(errorPct) > 10
+                    ? "text-destructive"
+                    : Number(errorPct) > 5
+                    ? "text-warning"
+                    : "text-success"
+                return (
+                  <tr
+                    key={route.route}
+                    className="border-b border-border/50 last:border-0 transition-colors hover:bg-muted/30"
                   >
-                    {route.averageDurationMs !== undefined ? `${averageDurationMs.toLocaleString()}ms` : "N/A"}
-                  </td>
-                </tr>
-              )
-            })}
+                    <td className="py-2.5 pr-4 font-mono font-medium text-foreground">
+                      {route.route}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
+                      {total > 0 ? `${(total / 1000).toFixed(1)}k` : "N/A"}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-destructive">
+                      {failed.toLocaleString()}
+                    </td>
+                    <td className={cn("py-2.5 px-3 text-right font-mono font-medium", errorLevel)}>
+                      {errorPct}%
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">
+                      {route.averageDurationMs !== undefined ? `${averageDurationMs}ms` : "N/A"}
+                    </td>
+                    <td className="py-2.5 pl-3 text-right font-mono text-muted-foreground">
+                      N/A
+                    </td>
+                  </tr>
+                )
+              })
+            )}
           </tbody>
         </table>
       </div>

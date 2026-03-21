@@ -25,11 +25,38 @@ export interface ChatSession {
   messageCount: number
 }
 
+export interface SessionSummary {
+  sessionId: string
+  clientId?: string
+  title: string
+  lastMessage: string
+  messageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface LogStats {
   totalRequests: number
   failedRequests: number
   successRate: number
-  averageDurationMs: number
+  /** Omitted when the pipeline does not measure latency (e.g. ERROR_RATE). */
+  averageDurationMs?: number
+}
+
+export interface BreakdownRow {
+  label: string
+  count: number
+}
+
+export interface PercentileRow {
+  percentile: string
+  valueMs: number
+  requestCount?: number
+}
+
+export interface ErrorTrendHalfWindow {
+  firstErrorRatePct: number
+  secondErrorRatePct: number
 }
 
 export interface TimeSeriesPoint {
@@ -66,6 +93,10 @@ export interface StatsPayload {
   overview?: LogStats
   timeseries?: TimeSeriesPoint[]
   routes?: RouteMetric[]
+  breakdown?: BreakdownRow[]
+  percentiles?: PercentileRow[]
+  halfWindow?: ErrorTrendHalfWindow
+  statusDistribution?: StatusDistribution[]
   raw?: unknown
 }
 

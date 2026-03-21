@@ -14,6 +14,8 @@ Beyond simple text-based debugging, this system:
 - Treats each request as a **First-class Event (Wide Event / Canonical Log Line)** with rich context, enabling analytics-grade debugging, secure retrieval, and AI-assisted reasoning.
 - Combines a **Wide Event** approach with a **RAG (Retrieval-Augmented Generation)** pipeline to overcome the limitations of traditional fragmented logging.
 
+The repository includes a **LogLens** web client (React / Vite) that talks to the Phase 4–5 search API: session-based chat, natural-language questions, and a **live statistics panel** (error rate, latency percentiles, request volume over time, and half-window error trend) grounded in aggregated log data. See **Client UI (LogLens)** below.
+
 ---
 
 ## 📖 Documentation
@@ -26,19 +28,36 @@ For detailed information on the **technical background, architectural philosophy
 
 ## 🏗️ Project Structure
 
-```bash
+```text
 .
-├── backend/            # NestJS server source code
-│   ├── src/            # Business logic (Payments, Embeddings, etc.)
-│   ├── libs/config/    # Initialization and configuration
-│   └── libs/logging/   # Core logging library (Shared across Phases 1-5)
-├── prompts/            # Prompts for LLM retrieval
-├── docker/             # Infrastructure configuration (Docker Compose)
-├── docs/               # Detailed design documents per Phase (WIP)
-├── journals/           # Retrospective journals per Phase
-├── test_data/          # Generation utils of test data and mock business requests
-└── OVERVIEW.md         # Architectural philosophy and background
+├── backend/                 # NestJS API (Payments, Embeddings / search, etc.)
+│   ├── src/
+│   ├── libs/config/
+│   ├── libs/logging/        # Wide-event logging (Phases 1–5)
+│   └── prompts/             # LLM prompt templates (classification, synthesis, grounding, …)
+├── frontend/                # LogLens UI — React, Vite, Feature-Sliced Design
+├── docker/                  # Docker Compose (MongoDB, Kafka, Redis, …)
+├── docs/                    # Design notes and screenshots
+├── journals/                # Phase retrospectives
+├── notes/                   # Short decision logs and task notes
+├── test_data/               # Load-test generators and mock traffic
+├── OVERVIEW.md              # Motivation and background (English)
+└── OVERVIEW-ko.md           # Same (Korean)
 ```
+
+---
+
+## 🖥️ Client UI (LogLens)
+
+![LogLens — session chat and live statistics](./docs/images/client-interface.png)
+
+The **LogLens RAG** interface (see [`frontend/`](./frontend/)) provides:
+
+- **Sessions**: Search and open chat sessions; start a new analysis thread.
+- **Natural-language queries**: Ask about error rates, latency, or failures; optional **narrow time ranges** (including explicit `start`/`end` timestamps) are passed through query classification so statistics match the requested window.
+- **Live updates** (right panel): Summary cards (total requests, error rate, average and P99 latency, success rate), **error trend** (first half vs second half of the window), **latency percentiles** (P50 / P95 / P99), and a **request volume** chart (requests vs errors over time).
+
+For short windows (on the order of minutes), the backend chooses **finer time buckets** so the volume chart shows multiple points instead of a single bar when data exists across the interval.
 
 ---
 
@@ -53,15 +72,16 @@ For detailed information on the **technical background, architectural philosophy
 ### 2. Installation & Environment Setup
 
 ```bash
-# Navigate to the project backend
+# Backend (API)
 cd backend
-
-# Install dependencies
 pnpm install
 
-# Environment Variables
-# Refer to backend/.env.example to create your .env file.
-# API keys for Gemini and Voyage AI are required from Phase 3 onwards.
+# Environment variables: copy from backend/.env.example to .env.
+# Gemini and Voyage AI keys are required from Phase 3 onward.
+
+# Frontend (LogLens UI) — optional; set API base URL per frontend config / env
+cd ../frontend
+pnpm install
 ```
 
 ### 3. Run Infrastructure (Docker)
@@ -69,6 +89,18 @@ pnpm install
 ```bash
 cd docker
 docker-compose up -d
+```
+
+### 4. Run the app (development)
+
+```bash
+# Terminal 1 — API (default http://localhost:3000)
+cd backend
+pnpm run start:dev
+
+# Terminal 2 — LogLens UI (see frontend/README.md for Vite dev server URL)
+cd frontend
+pnpm run dev
 ```
 
 ---
@@ -215,13 +247,13 @@ Query your logs using natural language and receive AI-driven insights.
       --data-urlencode "q=What did I just asked you?" \
       --data-urlencode "sessionId=<your-test-session-ID>"
     ```
-  - **Statistical Search**
+  - **Statistical / aggregation queries** (error rates, counts, trends — charts and summary cards appear in LogLens when using the UI)
     ```bash
       curl -G "http://localhost:3000/search/ask" \
       --data-urlencode "q=How many failures are happened within 48 hours?" \
       --data-urlencode "sessionId=<your-test-session-ID>"
     ```
-- **Verification**: AI returns responses grounded in actual log data and session history.
+- **Verification**: AI returns responses grounded in actual log data and session history. With the **LogLens** UI running, you can run the same flows in the browser and inspect charts and summary cards for statistical answers.
 
 ### Phase 5: Production Hardening
 

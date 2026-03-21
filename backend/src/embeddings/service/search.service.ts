@@ -1,14 +1,12 @@
 import { Injectable, Logger, Inject } from "@nestjs/common";
 import {
   SearchUseCase,
-  INTENT_CLASSIFIER,
-  IntentClassifier,
   QueryStrategy,
   QueryContext,
   QUERY_STRATEGIES,
 } from "@embeddings/in-ports";
 import { SynthesisPort } from "@embeddings/out-ports";
-import { AnalysisResult } from "@embeddings/dtos";
+import { AnalysisResult, SessionSummary } from "@embeddings/dtos";
 import { AnalysisIntent } from "@embeddings/value-objects/filter";
 import { SessionCacheService } from "../infrastructure/cache/session-cache.service";
 import {
@@ -16,7 +14,6 @@ import {
   ContextCompressionService,
 } from "./preprocessing";
 import { KeywordIntentClassifier } from "./classifiers";
-import { normalizeMetadata } from "@embeddings/utils";
 
 /**
  * SearchService - Orchestrates query handling using Strategy Pattern.
@@ -37,8 +34,6 @@ export class SearchService extends SearchUseCase {
   constructor(
     @Inject(QUERY_STRATEGIES)
     private readonly strategies: QueryStrategy[],
-    @Inject(INTENT_CLASSIFIER)
-    private readonly intentClassifier: IntentClassifier,
     private readonly keywordIntentClassifier: KeywordIntentClassifier,
     private readonly synthesisPort: SynthesisPort,
     private readonly sessionCache: SessionCacheService,
@@ -66,7 +61,11 @@ export class SearchService extends SearchUseCase {
    * @param sessionId The session ID for chat history.
    * @returns The analysis result containing the answer, confidence, and source.
    */
-  async ask(query: string, sessionId?: string): Promise<AnalysisResult> {
+  async ask(
+    query: string,
+    sessionId?: string,
+    clientId?: string,
+  ): Promise<AnalysisResult> {
     this.logger.log(
       `Processing RAG query: "${query}" (Session: ${sessionId || "none"})`,
     );
@@ -85,20 +84,21 @@ export class SearchService extends SearchUseCase {
           query,
           history,
           sessionId,
+          clientId,
         );
         return strategy.execute(context);
       }
 
-      const context = await this.buildQueryContext(query, history, sessionId);
-
-      const classification = await this.intentClassifier.classify(
+      const context = await this.buildQueryContext(
         query,
         history,
-        context.metadata,
+        sessionId,
+        clientId,
       );
-      const strategy = this.resolveStrategy(classification.intent);
+
+      const strategy = this.resolveStrategy(context);
       this.logger.log(
-        `Selected strategy: ${strategy.intent} (classified=${classification.intent}, source=${classification.source}, confidence=${classification.confidence})`,
+        `Selected strategy: ${strategy.intent} (templateId=${context.templateId ?? 'null'})`,
       );
 
       return strategy.execute(context);
@@ -116,14 +116,20 @@ export class SearchService extends SearchUseCase {
     return this.sessionCache.getHistory(sessionId);
   }
 
-  private resolveStrategy(intent: AnalysisIntent): QueryStrategy {
-    if (
-      intent === AnalysisIntent.SEQUENTIAL ||
-      intent === AnalysisIntent.UNKNOWN
-    ) {
-      return this.defaultStrategy;
+  async listSessions(clientId: string): Promise<SessionSummary[]> {
+    return this.sessionCache.listSessions(clientId);
+  }
+
+  async deleteSession(sessionId: string, clientId: string): Promise<boolean> {
+    return this.sessionCache.deleteSession(sessionId, clientId);
+  }
+
+  private resolveStrategy(context: QueryContext): QueryStrategy {
+    if (context.templateId) {
+      const statistical = this.strategyByIntent.get(AnalysisIntent.STATISTICAL);
+      if (statistical) return statistical;
     }
-    return this.strategyByIntent.get(intent) ?? this.defaultStrategy;
+    return this.defaultStrategy;
   }
 
   /**
@@ -149,6 +155,7 @@ export class SearchService extends SearchUseCase {
     query: string,
     history: AnalysisResult[],
     sessionId?: string,
+    clientId?: string,
   ): QueryContext {
     const targetLanguage = this.synthesisPort.detectLanguage(query);
 
@@ -166,6 +173,7 @@ export class SearchService extends SearchUseCase {
       },
       history,
       sessionId,
+      clientId,
       targetLanguage,
     };
   }
@@ -178,6 +186,7 @@ export class SearchService extends SearchUseCase {
     query: string,
     history: AnalysisResult[],
     sessionId?: string,
+    clientId?: string,
   ): Promise<QueryContext> {
     // 1. Detect original language
     const originalLanguage = this.synthesisPort.detectLanguage(query);
@@ -218,28 +227,25 @@ export class SearchService extends SearchUseCase {
         ? await this.contextCompression.compressHistory(history)
         : history;
 
-    // 6. Extract metadata from reformulated query
-    const metadata = await this.synthesisPort.extractMetadata(
-      safeReformulatedQuery,
-    );
-
-    const normalizedMetadata = normalizeMetadata(metadata);
+    // 6. Classify intent and extract metadata in one LLM call
+    const { templateId, params: templateParams, metadata } =
+      await this.synthesisPort.classifyAndExtract(safeReformulatedQuery);
 
     this.logger.log(
-      `Extracted metadata from reformulated query: ${JSON.stringify(metadata)}`,
-    );
-    this.logger.log(
-      `Normalized metadata: ${JSON.stringify(normalizedMetadata)}`,
+      `classifyAndExtract: templateId=${templateId ?? 'null'}, metadata=${JSON.stringify(metadata)}`,
     );
 
     return {
       originalQuery: query,
       reformulatedQuery: safeReformulatedQuery,
       isStandalone,
-      metadata: normalizedMetadata,
+      metadata,
       history: compressedHistory,
       sessionId,
+      clientId,
       targetLanguage: originalLanguage,
+      templateId: templateId ?? null,
+      templateParams: templateId ? templateParams : undefined,
     };
   }
 

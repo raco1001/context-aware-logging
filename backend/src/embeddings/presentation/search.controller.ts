@@ -1,4 +1,12 @@
-import { Controller, Get, Query, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Delete,
+  Query,
+  Param,
+  Logger,
+  Headers,
+} from '@nestjs/common';
 import { SearchUseCase } from '@embeddings/in-ports';
 import { Service } from '@logging/presentation';
 
@@ -14,7 +22,11 @@ export class SearchController {
   constructor(private readonly searchUseCase: SearchUseCase) {}
 
   @Get('ask')
-  async ask(@Query('q') query: string, @Query('sessionId') sessionId?: string) {
+  async ask(
+    @Query('q') query: string,
+    @Query('sessionId') sessionId?: string,
+    @Headers('x-client-id') clientId?: string,
+  ) {
     if (!query) {
       return { error: '(q) query is required.' };
     }
@@ -23,7 +35,7 @@ export class SearchController {
       `Received RAG query: ${query} (Session: ${sessionId || 'none'})`,
     );
     try {
-      return await this.searchUseCase.ask(query, sessionId);
+      return await this.searchUseCase.ask(query, sessionId, clientId);
     } catch (error) {
       this.logger.error(`Failed to process search query: ${error.message}`);
       return {
@@ -34,10 +46,30 @@ export class SearchController {
   }
 
   @Get('history')
-  async getHistory(@Query('sessionId') sessionId: string) {
+  async getHistory(
+    @Query('sessionId') sessionId: string,
+    @Headers('x-client-id') _clientId?: string,
+  ) {
     if (!sessionId) {
       return { error: 'sessionId is required.' };
     }
     return await this.searchUseCase.getChatHistory(sessionId);
+  }
+
+  @Get('sessions')
+  async listSessions(@Headers('x-client-id') clientId?: string) {
+    return await this.searchUseCase.listSessions(clientId ?? '');
+  }
+
+  @Delete('sessions/:sessionId')
+  async deleteSession(
+    @Param('sessionId') sessionId: string,
+    @Headers('x-client-id') clientId?: string,
+  ) {
+    const deleted = await this.searchUseCase.deleteSession(
+      sessionId ?? '',
+      clientId ?? '',
+    );
+    return { deleted };
   }
 }

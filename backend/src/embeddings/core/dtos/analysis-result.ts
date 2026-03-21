@@ -1,4 +1,5 @@
 export type {
+  SessionSummary,
   AnalysisResult,
   AnalysisIntent,
   AnalysisViewType,
@@ -7,5 +8,8 @@ export type {
   LogStats,
   TimeSeriesPoint,
   RouteMetric,
+  BreakdownRow,
+  PercentileRow,
+  ErrorTrendHalfWindow,
   StatsPayload,
 } from '@contracts';

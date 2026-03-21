@@ -28,7 +28,8 @@ export class ConversationalQueryStrategy implements QueryStrategy {
   ) {}
 
   async execute(context: QueryContext): Promise<AnalysisResult> {
-    const { originalQuery, history, sessionId, targetLanguage } = context;
+    const { originalQuery, history, sessionId, clientId, targetLanguage } =
+      context;
 
     this.logger.log(
       `Executing conversational query strategy for: "${originalQuery}"`,
@@ -76,7 +77,7 @@ export class ConversationalQueryStrategy implements QueryStrategy {
     };
 
     if (sessionId) {
-      await this.sessionCache.updateSession(sessionId, result);
+      await this.sessionCache.updateSession(sessionId, result, clientId);
     }
 
     return result;

@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   EmbeddingUseCase,
   SearchUseCase,
-  INTENT_CLASSIFIER,
   QUERY_STRATEGIES,
 } from '@embeddings/in-ports';
 import {
@@ -21,7 +20,6 @@ import {
   StatisticalQueryStrategy,
   ConversationalQueryStrategy,
   KeywordIntentClassifier,
-  HybridIntentClassifier,
   QueryPreprocessorService,
   SummaryEnrichmentService,
   AggregationService,
@@ -48,11 +46,10 @@ import {
 } from '@embeddings/presentation';
 import {
   PromptTemplateRegistry,
-  QueryMetadataSynthesisPrompt,
+  QueryClassificationPrompt,
   SemanticSynthesisPrompt,
   QueryReformulationSynthesisPrompt,
   HistorySummarizationSynthesisPrompt,
-  StatisticalAnalysisPrompt,
   GroundingVerificationPrompt,
   LogStyleTransformationPrompt,
 } from '@embeddings/domain/prompts';
@@ -64,9 +61,9 @@ import {
     PromptTemplateRegistry,
     // Prompt Template Instances (injected with registry)
     {
-      provide: QueryMetadataSynthesisPrompt,
+      provide: QueryClassificationPrompt,
       useFactory: (registry: PromptTemplateRegistry) => {
-        return new QueryMetadataSynthesisPrompt(registry);
+        return new QueryClassificationPrompt(registry);
       },
       inject: [PromptTemplateRegistry],
     },
@@ -88,13 +85,6 @@ import {
       provide: HistorySummarizationSynthesisPrompt,
       useFactory: (registry: PromptTemplateRegistry) => {
         return new HistorySummarizationSynthesisPrompt(registry);
-      },
-      inject: [PromptTemplateRegistry],
-    },
-    {
-      provide: StatisticalAnalysisPrompt,
-      useFactory: (registry: PromptTemplateRegistry) => {
-        return new StatisticalAnalysisPrompt(registry);
       },
       inject: [PromptTemplateRegistry],
     },
@@ -134,11 +124,6 @@ import {
     StatisticalQueryStrategy,
     ConversationalQueryStrategy,
     KeywordIntentClassifier,
-    HybridIntentClassifier,
-    {
-      provide: INTENT_CLASSIFIER,
-      useClass: HybridIntentClassifier,
-    },
     {
       provide: QUERY_STRATEGIES,
       useFactory: (

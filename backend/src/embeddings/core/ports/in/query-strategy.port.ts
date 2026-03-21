@@ -24,8 +24,24 @@ export interface QueryContext {
   /** Session ID for cache management */
   readonly sessionId?: string;
 
+  /** Optional X-Client-Id for persistence */
+  readonly clientId?: string;
+
   /** Detected language of the original query */
   readonly targetLanguage: 'Korean' | 'English';
+
+  /**
+   * Aggregation template ID returned by classifyAndExtract().
+   * Non-null value signals STATISTICAL intent and identifies which pipeline to run.
+   * Null means the query should be handled by the SEMANTIC strategy.
+   */
+  readonly templateId?: string | null;
+
+  /**
+   * Template parameters (topN, metadata) returned alongside templateId.
+   * Only meaningful when templateId is non-null.
+   */
+  readonly templateParams?: Record<string, any>;
 }
 
 /**
